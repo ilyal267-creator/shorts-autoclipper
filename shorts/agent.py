@@ -58,17 +58,28 @@ def _call(schema: dict, user_prompt: str) -> dict:
     import anthropic
 
     client = anthropic.Anthropic()
-    response = client.messages.create(
+    # Streamed, because thinking counts against max_tokens and a long transcript pushes both
+    # the reasoning and the plan well past a modest budget — a cap lands as a half-written
+    # JSON string, not an error. Streaming also keeps a multi-minute call off the HTTP timeout.
+    with client.messages.stream(
         model=MODEL,
-        max_tokens=16000,
+        max_tokens=64000,
         system=[{"type": "text", "text": system_prompt(), "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_prompt}],
         thinking={"type": "adaptive"},
         output_config={"effort": "high", "format": {"type": "json_schema", "schema": schema}},
-    )
+    ) as stream:
+        response = stream.get_final_message()
+
     if response.stop_reason == "refusal":
         detail = getattr(response, "stop_details", None)
         raise AgentError(f"model declined the request: {getattr(detail, 'explanation', '')}")
+    if response.stop_reason == "max_tokens":
+        raise AgentError(
+            "model ran out of output budget mid-answer (%d tokens used) — the reply is "
+            "truncated, not malformed; raise max_tokens or shorten the transcript"
+            % response.usage.output_tokens
+        )
     text = next((b.text for b in response.content if b.type == "text"), None)
     if not text:
         raise AgentError("model returned no text block")
