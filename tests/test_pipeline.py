@@ -302,6 +302,15 @@ def test_render_plan_matches_the_cut_list():
     assert r"{\c&H004DE1FF}boom{\r}" in ass  # highlight colour applied to the emphasis word
     assert ",424,1" in ass  # MarginV clears the bottom 20% safe zone
 
+    # a merge can hand the same emphasis word in twice; highlighting must not nest
+    from shorts.clips import Line
+
+    doubled = render.build_ass(
+        [Line("It's a bomb", 0.0, 1.0, ["bomb", "bomb"])], config_mod.DEFAULT_SUBTITLE_STYLE
+    )
+    assert r"{\c&H004DE1FF}{\c&H004DE1FF}" not in doubled
+    assert doubled.count(r"{\c&H004DE1FF}bomb{\r}") == 1
+
 
 def test_audio_extract_pins_the_same_track_the_render_uses():
     from shorts import media

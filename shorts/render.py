@@ -36,7 +36,9 @@ def _ass_time(seconds: float) -> str:
 
 def _ass_text(line: Line, highlight: str) -> str:
     body = line.text.replace("{", "(").replace("}", ")").replace("\n", " ")
-    for word in line.emphasis:
+    # Merging lines concatenates their emphasis, so the same word can arrive twice. Highlighting
+    # it twice nests the override tags around the text already wrapped by the first pass.
+    for word in dict.fromkeys(line.emphasis):
         body = body.replace(word, r"{\c%s}%s{\r}" % (highlight, word), 1)
     return body
 
