@@ -165,6 +165,39 @@ def test_render_plan_matches_the_cut_list():
     assert ",424,1" in ass  # MarginV clears the bottom 20% safe zone
 
 
+def test_load_env_does_not_shadow_real_variables():
+    import os
+    import tempfile
+
+    from shorts.__main__ import load_env
+
+    with tempfile.TemporaryDirectory() as tmp:
+        env_file = Path(tmp) / ".env"
+        env_file.write_text(
+            "# a comment\n"
+            "\n"
+            'SHORTS_TEST_QUOTED="quoted value"\n'
+            "SHORTS_TEST_PLAIN = plain\n"
+            "SHORTS_TEST_BLANK=\n"
+            "SHORTS_TEST_TAKEN=from-file\n"
+            "not a pair\n",
+            encoding="utf-8",
+        )
+        os.environ["SHORTS_TEST_TAKEN"] = "from-environment"
+        os.environ.pop("SHORTS_TEST_BLANK", None)
+        try:
+            loaded = load_env(env_file)
+            assert os.environ["SHORTS_TEST_QUOTED"] == "quoted value"
+            assert os.environ["SHORTS_TEST_PLAIN"] == "plain"
+            assert "SHORTS_TEST_BLANK" not in os.environ  # empty line must not set anything
+            assert os.environ["SHORTS_TEST_TAKEN"] == "from-environment"  # real env wins
+            assert "SHORTS_TEST_TAKEN" not in loaded
+        finally:
+            for key in ("SHORTS_TEST_QUOTED", "SHORTS_TEST_PLAIN", "SHORTS_TEST_TAKEN"):
+                os.environ.pop(key, None)
+    assert load_env(Path(tmp) / "gone.env") == []
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

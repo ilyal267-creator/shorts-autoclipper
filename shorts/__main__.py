@@ -7,8 +7,28 @@ import json
 import os
 import shutil
 import sys
+from pathlib import Path
 
 from . import agent, config as config_mod, run as run_mod
+
+
+def load_env(path: str | Path = ".env") -> list[str]:
+    """Read KEY=value lines into the environment. Real environment variables win."""
+    source = Path(path)
+    if not source.exists():
+        return []
+    loaded = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        # Blank entries in a copied .env.example must not shadow a real variable.
+        if value and key and key not in os.environ:
+            os.environ[key] = value
+            loaded.append(key)
+    return loaded
 
 
 def _load(args) -> config_mod.Config:
@@ -64,6 +84,7 @@ def cmd_doctor(args) -> int:
 def main(argv=None) -> int:
     if hasattr(sys.stdout, "reconfigure"):  # the summary is UTF-8; Windows consoles often aren't
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    load_env(os.getenv("SHORTS_ENV_FILE", ".env"))
     parser = argparse.ArgumentParser(prog="shorts", description="Shorts auto-clipper & publisher")
     sub = parser.add_subparsers(dest="command", required=True)
 

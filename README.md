@@ -24,7 +24,7 @@ the cut timeline (`shorts/clips.py`) — the model never gets to be off by a syl
 
 ```bash
 pip install -e .
-cp .env.example .env      # fill in what you have
+cp .env.example .env      # fill in what you have; the CLI reads it, real env vars win
 python -m shorts doctor   # checks ffmpeg + credentials
 ```
 
