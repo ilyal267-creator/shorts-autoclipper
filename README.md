@@ -59,13 +59,18 @@ testable offline, not so it can post.
 ```bash
 python tests/test_pipeline.py     # logic, stdlib only
 python tests/test_render_e2e.py   # generates a source video and renders it; needs ffmpeg
+
+# render into a directory it won't clean up, so you can watch the result
+SHORTS_E2E_OUT=./render-check python tests/test_render_e2e.py
 ```
 
 The first covers the parts that fail silently: cut-range maths, subtitle re-timing across cuts, subtitle
 chunking, schedule slots, config defaults, the compliance gates, the cross-platform duplicate
 detector, and the shape of the ffmpeg filtergraph. The second runs the whole pipeline against a
 generated source and checks the rendered mp4 is 1080x1920, the right length, and carries burned
-subtitles. Both run in CI on every push.
+subtitles. Both run in CI on every push, and the render job uploads what it made as a
+**rendered-clips** artifact — the mp4s, their subtitle files, the log and the summary — so you can
+watch the output of a run instead of taking the assertions' word for it.
 
 ## Known limits
 

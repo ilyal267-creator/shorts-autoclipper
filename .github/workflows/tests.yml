@@ -33,3 +33,12 @@ jobs:
       - name: Install ffmpeg
         run: command -v ffmpeg || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
       - run: python tests/test_render_e2e.py
+        env:
+          SHORTS_E2E_OUT: ${{ runner.temp }}/render-check
+      - name: Keep the rendered clips
+        if: always()  # a failed render is exactly when you want to watch it
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-clips
+          path: ${{ runner.temp }}/render-check/out
+          if-no-files-found: warn

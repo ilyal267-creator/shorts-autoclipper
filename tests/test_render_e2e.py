@@ -4,10 +4,12 @@ Needs ffmpeg on PATH; skips itself when there isn't one. Everything else is stdl
 run uses the mock provider so no API key and no network are involved.
 
     python tests/test_render_e2e.py
+    SHORTS_E2E_OUT=./render-check python tests/test_render_e2e.py   # keep what it rendered
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -54,14 +56,26 @@ def make_transcript(path: Path) -> None:
     )
 
 
+@contextlib.contextmanager
+def workspace():
+    """A scratch dir, or SHORTS_E2E_OUT when you want to keep and look at the clips."""
+    override = os.getenv("SHORTS_E2E_OUT")
+    if override:
+        path = Path(override).resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        yield path
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            yield Path(tmp)
+
+
 def test_render_end_to_end():
     if not shutil.which("ffmpeg"):
         print("SKIP: ffmpeg not on PATH — nothing was rendered or checked")
         return False
 
     os.environ["SHORTS_PROVIDER"] = "mock"
-    with tempfile.TemporaryDirectory() as tmp:
-        work = Path(tmp)
+    with workspace() as work:
         source, transcript = work / "source.mp4", work / "transcript.json"
         make_source(source)
         make_transcript(transcript)
@@ -103,6 +117,8 @@ def test_render_end_to_end():
         assert any("MOCK" in flag for flag in summary["flags_for_human_review"])
         assert (Path(cfg.output_dir) / "summary.json").exists()
         print("ok  rendered %d clips at 1080x1920 with burned captions" % len(summary["clips"]))
+        if os.getenv("SHORTS_E2E_OUT"):
+            print("    kept in %s" % work)
         return True
 
 
