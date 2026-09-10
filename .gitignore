@@ -5,3 +5,5 @@ out/
 input/
 build/
 *.egg-info/
+run.json
+render-check/
