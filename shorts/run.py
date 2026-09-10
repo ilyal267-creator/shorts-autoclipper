@@ -12,7 +12,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import agent, compliance, media, publish as publishing, render as rendering
-from .clips import Clip, duplicate_copy, platform_notes, retime, subtitle_lines, validate
+from .clips import (
+    Clip,
+    duplicate_copy,
+    platform_notes,
+    retime,
+    seams,
+    subtitle_lines,
+    validate,
+)
 from .config import Config
 from .schedule import Queue, slots
 from .transcribe import transcribe
@@ -156,7 +164,9 @@ class Run:
             return self._clip_row(clip, {p["platform"]: {"status": "excluded", "reason": clip.excluded_reason} for p in cfg.connected_accounts})
 
         emphasis = clip.copy.get("tiktok", {}).get("emphasis_words", [])
-        clip.subtitles = subtitle_lines(words, emphasis, clip_end=clip.duration)
+        clip.subtitles = subtitle_lines(
+            words, emphasis, clip_end=clip.duration, seam_points=seams(clip.keeps)
+        )
         for note in rendering.audio_notes(clip):
             self.flags.append(note)
 

@@ -100,6 +100,21 @@ def retime(words: list[Word], keeps: list[tuple[float, float]]) -> list[Word]:
 MIN_DISPLAY = 0.5  # seconds a line must be on screen to be readable at all
 
 
+def seams(keeps: list[tuple[float, float]]) -> list[float]:
+    """Clip-timeline points where a cut removed the middle and joined what was either side."""
+    out: list[float] = []
+    offset = 0.0
+    for start, end in keeps[:-1]:
+        offset += end - start
+        out.append(round(offset, 3))
+    return out
+
+
+def _crosses(seam_points: list[float], left: float, right: float) -> bool:
+    """True when a cut sits between these two moments — they were never spoken together."""
+    return any(left - 1e-6 <= seam <= right + 1e-6 for seam in seam_points)
+
+
 def _ends_sentence(text: str) -> bool:
     """An ellipsis is the opposite of a full stop — the speaker is trailing off, not finishing."""
     stripped = text.rstrip()
@@ -114,6 +129,7 @@ def merge_strays(
     join_gap: float = 0.35,
     forward_gap: float = 2.0,
     clip_end: float | None = None,
+    seam_points: list[float] | None = None,
 ) -> list[Line]:
     """Reunite a lone word with the phrase it belongs to.
 
@@ -122,6 +138,7 @@ def merge_strays(
     look at. Which way it joins follows the punctuation — a word that ends a sentence closes
     the line before it, one that does not opens the line after it.
     """
+    seam_points = seam_points or []
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -138,6 +155,7 @@ def merge_strays(
             and not _ends_sentence(previous.text)
             and line.start - previous.end <= join_gap
             and len(previous.text.split()) + 1 <= room
+            and not _crosses(seam_points, previous.end, line.start)
         ):
             previous.text = "%s %s" % (previous.text, line.text)
             previous.end = max(previous.end, line.end)
@@ -150,6 +168,7 @@ def merge_strays(
             and not _ends_sentence(line.text)
             and following.start - line.end <= forward_gap
             and len(following.text.split()) + 1 <= room
+            and not _crosses(seam_points, line.end, following.start)
         ):
             following.text = "%s %s" % (line.text, following.text)
             following.start = line.start
@@ -175,11 +194,13 @@ def tidy_lines(
     clip_end: float | None = None,
     min_display: float = MIN_DISPLAY,
     max_gap: float = 0.6,
+    seam_points: list[float] | None = None,
 ) -> list[Line]:
     """Give every line time to be read: stretch it, merge it, or — if the cut sliced through
     a phrase at the clip's edge — drop the leftover word rather than flash it for 0.1s."""
     lines = [Line(line.text, line.start, line.end, list(line.emphasis)) for line in lines]
-    lines = merge_strays(lines, clip_end=clip_end)  # reunite fragments first; often fixes timing too
+    seam_points = seam_points or []
+    lines = merge_strays(lines, clip_end=clip_end, seam_points=seam_points)
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -198,11 +219,19 @@ def tidy_lines(
         # 2. still too brief — fold it into a neighbour it runs together with
         previous = lines[index - 1] if index else None
         following = lines[index + 1] if index + 1 < len(lines) else None
-        if previous is not None and line.start - previous.end <= max_gap:
+        if (
+            previous is not None
+            and line.start - previous.end <= max_gap
+            and not _crosses(seam_points, previous.end, line.start)
+        ):
             previous.text = "%s %s" % (previous.text, line.text)
             previous.end = max(previous.end, line.end)
             previous.emphasis += line.emphasis
-        elif following is not None and following.start - line.end <= max_gap:
+        elif (
+            following is not None
+            and following.start - line.end <= max_gap
+            and not _crosses(seam_points, line.end, following.start)
+        ):
             following.text = "%s %s" % (line.text, following.text)
             following.start = line.start
             following.emphasis = line.emphasis + following.emphasis
@@ -217,6 +246,7 @@ def subtitle_lines(
     max_words: int = 5,
     max_gap: float = 0.6,
     clip_end: float | None = None,
+    seam_points: list[float] | None = None,
 ) -> list[Line]:
     """3-6 word chunks broken on natural pauses and sentence ends, not dumped by sentence."""
     wanted = {w.strip(".,!?").lower() for w in (emphasis or []) if w.strip()}
@@ -237,14 +267,18 @@ def subtitle_lines(
         )
         bucket.clear()
 
+    seam_points = seam_points or []
     for word in words:
-        if bucket and word.start - bucket[-1].end > max_gap:
+        # a cut landed here: what follows was never said next to what came before
+        if bucket and _crosses(seam_points, bucket[-1].end, word.start):
+            flush()
+        elif bucket and word.start - bucket[-1].end > max_gap:
             flush()
         bucket.append(word)
         if len(bucket) >= max_words or word.text.rstrip().endswith(tuple(SENTENCE_END)):
             flush()
     flush()
-    return tidy_lines(lines, clip_end=clip_end, max_gap=max_gap)
+    return tidy_lines(lines, clip_end=clip_end, max_gap=max_gap, seam_points=seam_points)
 
 
 def validate(clip: Clip, length_range: tuple[int, int], others: list[Clip]) -> list[str]:

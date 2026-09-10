@@ -155,6 +155,30 @@ def test_timeline_shows_both_ends_and_names_the_silences():
     )
 
 
+def test_lines_never_join_across_a_cut():
+    from shorts.clips import Line, merge_strays, seams, tidy_lines
+
+    # 10s kept, 2.4s removed, 4s kept -> the join lands at 10.0 on the clip timeline
+    assert seams(keep_ranges(15.6, 29.5, [(16.9, 19.3)])) == [1.3]
+    assert seams([(0.0, 10.0), (12.4, 16.4)]) == [10.0]
+    assert seams([(0.0, 10.0)]) == []  # nothing removed, nothing to guard
+
+    # "What's your" and "OK." sat seconds apart until the cut made them neighbours
+    across = [Line("What's your", 9.2, 10.0), Line("OK.", 10.0, 10.6)]
+    assert len(merge_strays(list(across), seam_points=[10.0])) == 2
+    assert len(merge_strays(list(across))) == 1  # would have merged without the seam
+
+    # the short-line rescue respects it too, rather than reaching over the cut
+    stitched = tidy_lines(
+        [Line("What's your", 9.2, 10.0), Line("OK.", 10.0, 10.2)], clip_end=14.0, seam_points=[10.0]
+    )
+    assert [line.text for line in stitched] == ["What's your", "OK."]
+
+    # and chunking starts a new line at the seam instead of running through it
+    words = [Word("what's", 9.2, 9.6), Word("your", 9.6, 10.0), Word("OK.", 10.0, 10.6)]
+    assert [line.text for line in subtitle_lines(words, seam_points=[10.0])] == ["what's your", "OK."]
+
+
 def test_snap_nudges_a_boundary_but_never_drags_it_across_silence():
     from shorts import agent
     from shorts.transcribe import Transcript
