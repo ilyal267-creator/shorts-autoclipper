@@ -78,20 +78,35 @@ def _call(schema: dict, user_prompt: str) -> dict:
 # --------------------------------------------------------------------------- transcript view
 
 
-def timeline(transcript: Transcript, chunk_seconds: float = 6.0) -> str:
-    """Timestamped lines — enough to pick boundaries from, far cheaper than word-level JSON."""
+def timeline(transcript: Transcript, chunk_seconds: float = 6.0, pause: float = 0.6) -> str:
+    """Speech in timed runs, with the silences between them called out.
+
+    Each line carries both ends of its span, and a gap worth cutting appears as its own
+    marker. Without that the model cannot see where the dead air is, so it either plans no
+    micro-cuts at all or guesses at them — §4.3 asks it to name the ranges to remove.
+    """
     lines: list[str] = []
     bucket: list[str] = []
-    bucket_start = None
+    start = end = None
+
+    def flush() -> None:
+        nonlocal bucket, start, end
+        if bucket:
+            lines.append("[%.1f-%.1f] %s" % (start, end, " ".join(bucket)))
+        bucket, start, end = [], None, None
+
     for word in transcript.words:
-        if bucket_start is None:
-            bucket_start = word.start
+        if start is not None and word.start - end >= pause:
+            gap_from, gap_to = end, word.start
+            flush()
+            lines.append("(silence %.1fs: %.1f-%.1f)" % (gap_to - gap_from, gap_from, gap_to))
+        if start is None:
+            start = word.start
         bucket.append(word.text)
-        if word.end - bucket_start >= chunk_seconds:
-            lines.append("[%.1f] %s" % (bucket_start, " ".join(bucket)))
-            bucket, bucket_start = [], None
-    if bucket and bucket_start is not None:
-        lines.append("[%.1f] %s" % (bucket_start, " ".join(bucket)))
+        end = word.end
+        if end - start >= chunk_seconds:
+            flush()
+    flush()
     return "\n".join(lines)
 
 
@@ -201,6 +216,11 @@ def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int) -> 
         "notes. Every clip must stand alone, open on a hook in its first 1-2 seconds, and pay "
         "that hook off before it ends. Do not let two clips make the same point. Timestamps in "
         "seconds, one decimal.\n\n"
+        "The transcript below is timed from word-level data. Each line spans [start-end], and "
+        "every silence long enough to cut is marked with its own range — use those for the "
+        "micro-cuts in `cuts`, and trust the boundaries to a tenth of a second. A boundary is "
+        "moved onto a nearby word edge only when one sits within half a second, so an in- or "
+        "out-point you place in silence to hold on the action is kept as you set it.\n\n"
         "Transcript:\n" + timeline(transcript)
     )
     return _call(CLIP_SCHEMA, prompt)

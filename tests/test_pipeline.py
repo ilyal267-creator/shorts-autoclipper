@@ -135,6 +135,26 @@ def test_merge_strays_reunites_a_word_with_its_phrase():
     assert len(over) == 2
 
 
+def test_timeline_shows_both_ends_and_names_the_silences():
+    from shorts import agent
+    from shorts.transcribe import Transcript
+
+    words = [
+        Word("hook", 0.0, 0.4), Word("line", 0.4, 0.9),
+        Word("after", 3.2, 3.6), Word("the", 3.6, 3.8), Word("gap", 3.8, 4.2),
+    ]
+    rendered = agent.timeline(Transcript(words=words, language="en", duration=5.0, source="t"))
+    assert "[0.0-0.9] hook line" in rendered
+    assert "(silence 2.3s: 0.9-3.2)" in rendered  # the cuttable range, stated outright
+    assert "[3.2-4.2] after the gap" in rendered
+
+    # a pause too short to cut does not fragment the run
+    tight = [Word("no", 0.0, 0.4), Word("break", 0.6, 1.0)]
+    assert agent.timeline(Transcript(words=tight, language="en", duration=2.0, source="t")) == (
+        "[0.0-1.0] no break"
+    )
+
+
 def test_snap_nudges_a_boundary_but_never_drags_it_across_silence():
     from shorts import agent
     from shorts.transcribe import Transcript
