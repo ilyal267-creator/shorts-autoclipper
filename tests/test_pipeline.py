@@ -1,0 +1,183 @@
+"""Runnable checks for the logic that is wrong silently: cut maths, re-timing, slots, policy.
+
+    python tests/test_pipeline.py        (or: pytest)
+"""
+
+from __future__ import annotations
+
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from shorts import compliance, config as config_mod, render  # noqa: E402
+from shorts.clips import (  # noqa: E402
+    Clip,
+    duplicate_copy,
+    keep_ranges,
+    map_time,
+    platform_notes,
+    retime,
+    subtitle_lines,
+    validate,
+)
+from shorts.publish import PublishError, publish  # noqa: E402
+from shorts.schedule import slots  # noqa: E402
+from shorts.transcribe import Word, load_words  # noqa: E402
+
+BASE_CONFIG = {
+    "source_video": "in.mp4",
+    "connected_accounts": [{"platform": "tiktok", "account_id": "acct_1", "handle": "@x"}],
+    "rights_confirmed": True,
+}
+
+
+def test_keep_ranges_merges_overlapping_and_unsorted_cuts():
+    assert keep_ranges(10, 20, []) == [(10.0, 20.0)]
+    assert keep_ranges(10, 20, [(12, 13)]) == [(10.0, 12.0), (13.0, 20.0)]
+    # out of order, overlapping, and one running past the end
+    assert keep_ranges(10, 20, [(16, 19), (12, 13), (12.5, 14), (19.5, 25)]) == [
+        (10.0, 12.0),
+        (14.0, 16.0),
+        (19.0, 19.5),
+    ]
+    assert keep_ranges(10, 20, [(5, 25)]) == []
+
+
+def test_retime_shifts_words_after_a_cut_and_drops_cut_words():
+    words = [Word("a", 10.0, 10.5), Word("gone", 12.2, 12.6), Word("b", 14.0, 14.5)]
+    keeps = keep_ranges(10, 20, [(12, 13)])
+    out = retime(words, keeps)
+    assert [w.text for w in out] == ["a", "b"]
+    assert out[0].start == 0.0
+    # "b" sat 4.0s in, minus the 1.0s cut before it
+    assert out[1].start == 3.0
+    assert map_time(12.5, keeps) is None
+
+
+def test_subtitle_lines_chunk_and_mark_emphasis():
+    words = [Word("w%d" % i, i * 0.4, i * 0.4 + 0.3) for i in range(11)]
+    words.append(Word("later", 8.0, 8.4))  # a pause longer than max_gap
+    lines = subtitle_lines(words, emphasis=["w3"])
+    assert all(len(line.text.split()) <= 5 for line in lines)
+    assert lines[-1].text == "later"
+    assert any("w3" in line.emphasis for line in lines)
+
+
+def test_validate_rejects_short_clips_and_near_duplicates():
+    a = Clip("clip_1", 0, 40, [], {}, "preserve", "", "high")
+    b = Clip("clip_2", 5, 45, [], {}, "preserve", "", "high")
+    short = Clip("clip_3", 0, 40, [(2, 35)], {}, "preserve", "", "high")
+    assert validate(a, (15, 45), [a]) == []
+    assert any("overlaps" in p for p in validate(a, (15, 45), [a, b]))
+    assert any("floor" in p for p in validate(short, (15, 45), [short]))
+
+
+def test_duplicate_copy_catches_cross_platform_reuse():
+    copy = {
+        "tiktok": {"hook": "Same hook", "caption": "one"},
+        "instagram_reels": {"hook": "same HOOK", "caption": "two"},
+    }
+    assert any("hook" in problem for problem in duplicate_copy(copy))
+
+
+def test_platform_notes_flag_drift_from_the_spec_table():
+    good = {"caption": "tight caption", "hashtags": ["#a", "#b", "#c"], "title": ""}
+    assert platform_notes("tiktok", good) == []
+    assert any("hashtags" in n for n in platform_notes("tiktok", {**good, "hashtags": ["#a"]}))
+    assert any("does not show" in n for n in platform_notes("tiktok", {**good, "title": "x"}))
+
+    yt = {"caption": "c", "hashtags": ["#a"], "title": "T" * 101}
+    assert any("truncated at 100" in n for n in platform_notes("youtube_shorts", yt))
+    assert any("no title" in n for n in platform_notes("youtube_shorts", {**yt, "title": ""}))
+
+
+def test_slots_respect_cadence_and_gap():
+    now = datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc)
+    schedule = {"times": ["09:00", "13:00", "18:00"], "per_platform_per_day": 1, "min_gap_minutes": 180, "timezone": "UTC"}
+    picked = slots(schedule, 3, now)
+    assert [s.isoformat() for s in picked] == [
+        "2026-09-10T13:00:00+00:00",
+        "2026-09-11T09:00:00+00:00",
+        "2026-09-12T09:00:00+00:00",
+    ]
+    two_per_day = slots({**schedule, "per_platform_per_day": 2}, 2, now)
+    assert [s.hour for s in two_per_day] == [13, 18]
+
+    # a second clip for the same account must not stack on a slot already booked
+    already = slots({**schedule, "per_platform_per_day": 3}, 1, now)
+    assert slots({**schedule, "per_platform_per_day": 3}, 1, now, taken=already)[0].hour == 18
+
+
+def test_config_defaults_and_hard_requirements():
+    cfg = config_mod.from_dict(dict(BASE_CONFIG))
+    assert cfg.posting_mode == "draft_for_approval"  # §8: never auto-publish unasked
+    assert cfg.clip_count == 3 and cfg.clip_length_range == (15, 45)
+    assert any("posting_mode" in flag for flag in cfg.flags)
+
+    for missing in ("source_video", "connected_accounts"):
+        raw = dict(BASE_CONFIG)
+        raw.pop(missing)
+        try:
+            config_mod.from_dict(raw)
+            raise AssertionError("expected ConfigError for missing %s" % missing)
+        except config_mod.ConfigError:
+            pass
+
+
+def test_compliance_blocks_banned_words_unconfirmed_rights_and_halts():
+    cfg = config_mod.from_dict({**BASE_CONFIG, "content_policy": {"banned_words": ["guaranteed"]}})
+    copy = {"tiktok": {"caption": "This is guaranteed to work", "hashtags": ["#x"]}}
+    verdict = compliance.check(cfg, "clean transcript", copy, {"verdict": "pass"})
+    assert not verdict.ok and "banned word" in verdict.reasons[0]
+
+    no_rights = config_mod.from_dict({**BASE_CONFIG, "rights_confirmed": False})
+    assert not compliance.check(no_rights, "hi", {"tiktok": {"caption": "hi"}}, {"verdict": "pass"}).ok
+
+    try:
+        compliance.check(cfg, "hi", {"tiktok": {"caption": "hi"}}, {"verdict": "halt_run", "reason": "minor safety"})
+        raise AssertionError("expected HaltRun")
+    except compliance.HaltRun:
+        pass
+
+
+def test_publish_refuses_without_an_asset():
+    try:
+        publish("tiktok", "acct_1", "", {"caption": "hi"})
+        raise AssertionError("expected PublishError")
+    except PublishError:
+        pass
+    assert publish("tiktok", "acct_1", "x.mp4", {"caption": "hi"}, dry_run=True).status == "skipped"
+
+
+def test_render_plan_matches_the_cut_list():
+    clip = Clip("clip_1", 10, 40, [(20, 22)], {"mode": "center_crop"}, "preserve", "", "high")
+    cmd = render.build_command(clip, "in.mp4", Path("out/clip_1.ass"), Path("out/clip_1.mp4"), 1920, 1080)
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "concat=n=2" in graph  # two keep ranges either side of the cut
+    assert "crop=607:1080" in graph  # 9:16 slice of a 1920x1080 source
+    assert clip.duration == 28.0
+
+    lines = subtitle_lines([Word("boom", 0.0, 0.5)], emphasis=["boom"])
+    ass = render.build_ass(lines, config_mod.DEFAULT_SUBTITLE_STYLE)
+    assert r"{\c&H004DE1FF}boom{\r}" in ass  # highlight colour applied to the emphasis word
+    assert ",424,1" in ass  # MarginV clears the bottom 20% safe zone
+
+
+def test_load_words_accepts_whisper_dumps():
+    words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
+    assert words[0].text == "hi"
+
+
+def main() -> int:
+    tests = [value for name, value in sorted(globals().items()) if name.startswith("test_")]
+    for test in tests:
+        test()
+        print("ok  %s" % test.__name__)
+    print("\n%d checks passed" % len(tests))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,46 @@
+{
+  "source_video": "input/interview.mp4",
+  "source_transcript": null,
+
+  "brand_voice": "energetic, Gen-Z, punchy, no corporate jargon",
+  "niche_keywords": ["devtools", "shipping", "indie hacking"],
+  "language": null,
+
+  "clip_count": 4,
+  "clip_length_range": [15, 45],
+
+  "connected_accounts": [
+    { "platform": "tiktok", "account_id": "7012345678901234567", "handle": "@demo" },
+    { "platform": "instagram_reels", "account_id": "17841400000000000", "handle": "@demo" },
+    { "platform": "youtube_shorts", "account_id": "UC0000000000000000000", "handle": "@demo" }
+  ],
+
+  "posting_mode": "draft_for_approval",
+  "posting_schedule": {
+    "per_platform_per_day": 1,
+    "times": ["09:00", "13:00", "18:00"],
+    "timezone": "Europe/Riga",
+    "min_gap_minutes": 180
+  },
+
+  "subtitle_style": {
+    "font": "Arial Black",
+    "size": 84,
+    "primary_color": "#FFFFFF",
+    "outline_color": "#000000",
+    "highlight_color": "#FFE14D",
+    "position": "lower_middle"
+  },
+
+  "content_policy": {
+    "banned_words": [],
+    "banned_topics": [],
+    "required_disclaimers": []
+  },
+
+  "rights_confirmed": false,
+  "third_party_music": false,
+
+  "public_asset_base_url": null,
+  "output_dir": "out"
+}
