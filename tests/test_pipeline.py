@@ -61,7 +61,7 @@ def test_subtitle_lines_chunk_and_mark_emphasis():
     words = [Word("w%d" % i, i * 0.4, i * 0.4 + 0.3) for i in range(11)]
     words.append(Word("later", 8.0, 8.4))  # a pause longer than max_gap
     lines = subtitle_lines(words, emphasis=["w3"])
-    assert all(len(line.text.split()) <= 5 for line in lines)
+    assert all(len(line.text.split()) <= 6 for line in lines)  # a merge may add one word
     assert lines[-1].text == "later"
     assert any("w3" in line.emphasis for line in lines)
 
@@ -85,6 +85,36 @@ def test_tidy_lines_gives_every_line_time_to_be_read():
     # emphasis survives a merge
     kept = tidy_lines([Line("all.", 5.7, 5.8, ["all."]), Line("Okay?", 5.9, 6.0)], clip_end=9.0)
     assert "all." in kept[0].emphasis
+
+
+def test_merge_strays_reunites_a_word_with_its_phrase():
+    from shorts.clips import Line, merge_strays
+
+    # a word that closes the sentence joins the line before it
+    back = merge_strays([Line("Look at me, look at", 4.5, 5.2), Line("me.", 5.2, 6.2)])
+    assert [line.text for line in back] == ["Look at me, look at me."]
+    assert back[0].end == 6.2
+
+    # a word that does not close a sentence opens the line after it, across a pause
+    forward = merge_strays([Line("What", 1.26, 2.22), Line("happened?", 3.08, 3.80)])
+    assert [line.text for line in forward] == ["What happened?"]
+    assert forward[0].start == 1.26
+
+    # trailing off is not finishing: an ellipsis joins forward, a full stop does not
+    ellipsis = merge_strays([Line("is...", 13.03, 13.87), Line("And that's that.", 15.63, 16.29)])
+    assert [line.text for line in ellipsis] == ["is... And that's that."]
+    full_stop = merge_strays([Line("Done.", 13.03, 13.87), Line("And that's that.", 15.63, 16.29)])
+    assert len(full_stop) == 2
+
+    # a one-word answer with nothing adjacent stays as it is
+    alone = merge_strays([Line("Yes.", 1.0, 2.0), Line("Much later on", 9.0, 10.0)])
+    assert [line.text for line in alone] == ["Yes.", "Much later on"]
+
+    # merging never builds an unreadable wall of text — 6 words is the ceiling (§4.4b)
+    at_limit = merge_strays([Line("one two three four five", 0.0, 2.0), Line("six", 2.0, 2.5)])
+    assert [line.text for line in at_limit] == ["one two three four five six"]
+    over = merge_strays([Line("one two three four five six", 0.0, 2.0), Line("seven", 2.0, 2.5)])
+    assert len(over) == 2
 
 
 def test_validate_rejects_short_clips_and_near_duplicates():

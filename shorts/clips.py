@@ -100,6 +100,66 @@ def retime(words: list[Word], keeps: list[tuple[float, float]]) -> list[Word]:
 MIN_DISPLAY = 0.5  # seconds a line must be on screen to be readable at all
 
 
+def _ends_sentence(text: str) -> bool:
+    """An ellipsis is the opposite of a full stop — the speaker is trailing off, not finishing."""
+    stripped = text.rstrip()
+    if stripped.endswith("...") or stripped.endswith("…"):
+        return False
+    return stripped.endswith(tuple(SENTENCE_END))
+
+
+def merge_strays(
+    lines: list[Line],
+    max_words: int = 5,
+    join_gap: float = 0.35,
+    forward_gap: float = 2.0,
+) -> list[Line]:
+    """Reunite a lone word with the phrase it belongs to.
+
+    Chunking on a word count or a pause can leave one word by itself: "Look at me, look at" /
+    "me.", or "What" waiting on the rest of its question. Long enough to read, still wrong to
+    look at. Which way it joins follows the punctuation — a word that ends a sentence closes
+    the line before it, one that does not opens the line after it.
+    """
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if len(line.text.split()) > 1:
+            index += 1
+            continue
+
+        previous = lines[index - 1] if index else None
+        following = lines[index + 1] if index + 1 < len(lines) else None
+        room = max_words + 1  # §4.4b wants 3-6 words a line; one over the chunk size, no more
+
+        if (
+            previous is not None
+            and not _ends_sentence(previous.text)
+            and line.start - previous.end <= join_gap
+            and len(previous.text.split()) + 1 <= room
+        ):
+            previous.text = "%s %s" % (previous.text, line.text)
+            previous.end = max(previous.end, line.end)
+            previous.emphasis += line.emphasis
+            del lines[index]
+            continue
+
+        if (
+            following is not None
+            and not _ends_sentence(line.text)
+            and following.start - line.end <= forward_gap
+            and len(following.text.split()) + 1 <= room
+        ):
+            following.text = "%s %s" % (line.text, following.text)
+            following.start = line.start
+            following.emphasis = line.emphasis + following.emphasis
+            del lines[index]
+            continue
+
+        index += 1  # genuinely standing alone — a one-word answer, or nothing to join
+    return lines
+
+
 def tidy_lines(
     lines: list[Line],
     clip_end: float | None = None,
@@ -109,6 +169,7 @@ def tidy_lines(
     """Give every line time to be read: stretch it, merge it, or — if the cut sliced through
     a phrase at the clip's edge — drop the leftover word rather than flash it for 0.1s."""
     lines = [Line(line.text, line.start, line.end, list(line.emphasis)) for line in lines]
+    lines = merge_strays(lines)  # reunite fragments first; it often fixes the timing too
     index = 0
     while index < len(lines):
         line = lines[index]
