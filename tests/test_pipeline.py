@@ -106,6 +106,24 @@ def test_merge_strays_reunites_a_word_with_its_phrase():
     full_stop = merge_strays([Line("Done.", 13.03, 13.87), Line("And that's that.", 15.63, 16.29)])
     assert len(full_stop) == 2
 
+    # a word left hanging by the out-point goes, however long it is on screen
+    cut_off = merge_strays(
+        [Line("Oh going to die.", 8.4, 9.42), Line("What's", 14.91, 15.47)], clip_end=15.5
+    )
+    assert [line.text for line in cut_off] == ["Oh going to die."]
+    # but a finished sentence at the end is content, not a fragment
+    finished = merge_strays(
+        [Line("Oh going to die.", 8.4, 9.42), Line("Wow.", 14.91, 15.47)], clip_end=15.5
+    )
+    assert len(finished) == 2
+    # and a lone word is never dropped when it is the only line there is
+    only = merge_strays([Line("What's", 0.0, 0.6)], clip_end=0.6)
+    assert [line.text for line in only] == ["What's"]
+
+    # a lone word with clear air after it was spoken that way, so it stays
+    spoken = merge_strays([Line("Right.", 1.0, 2.0), Line("later", 8.0, 8.4)], clip_end=20.0)
+    assert [line.text for line in spoken] == ["Right.", "later"]
+
     # a one-word answer with nothing adjacent stays as it is
     alone = merge_strays([Line("Yes.", 1.0, 2.0), Line("Much later on", 9.0, 10.0)])
     assert [line.text for line in alone] == ["Yes.", "Much later on"]

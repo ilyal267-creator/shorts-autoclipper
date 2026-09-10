@@ -113,6 +113,7 @@ def merge_strays(
     max_words: int = 5,
     join_gap: float = 0.35,
     forward_gap: float = 2.0,
+    clip_end: float | None = None,
 ) -> list[Line]:
     """Reunite a lone word with the phrase it belongs to.
 
@@ -157,6 +158,15 @@ def merge_strays(
             continue
 
         index += 1  # genuinely standing alone — a one-word answer, or nothing to join
+
+    # The out-point can cut a phrase mid-flow, leaving a word with nothing after it to join.
+    # It reads as a typo however long it is on screen, so it goes. Only when it truly abuts the
+    # out-point though: a lone word with clear air after it was spoken that way.
+    if len(lines) > 1 and clip_end is not None:
+        last = lines[-1]
+        sliced = last.end >= clip_end - join_gap
+        if sliced and len(last.text.split()) == 1 and not _ends_sentence(last.text):
+            del lines[-1]
     return lines
 
 
@@ -169,7 +179,7 @@ def tidy_lines(
     """Give every line time to be read: stretch it, merge it, or — if the cut sliced through
     a phrase at the clip's edge — drop the leftover word rather than flash it for 0.1s."""
     lines = [Line(line.text, line.start, line.end, list(line.emphasis)) for line in lines]
-    lines = merge_strays(lines)  # reunite fragments first; it often fixes the timing too
+    lines = merge_strays(lines, clip_end=clip_end)  # reunite fragments first; often fixes timing too
     index = 0
     while index < len(lines):
         line = lines[index]
