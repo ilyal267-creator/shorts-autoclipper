@@ -45,7 +45,24 @@ class Run:
             )
 
         probe = media.probe(cfg.source_video)
-        self.note("source %dx%d %.1fs" % (probe.width, probe.height, probe.duration))
+        self.note(
+            "source %dx%d %.1fs, %d audio track(s)"
+            % (probe.width, probe.height, probe.duration, probe.audio_tracks)
+        )
+        if probe.audio_tracks == 0:
+            raise media.MediaError("%s has no audio track to cut from" % cfg.source_video)
+        if cfg.audio_track >= probe.audio_tracks:
+            raise media.MediaError(
+                "audio_track %d does not exist — the source has %d track(s), numbered from 0"
+                % (cfg.audio_track, probe.audio_tracks)
+            )
+        if probe.audio_tracks > 1:
+            self.note("using audio track %d of %d" % (cfg.audio_track, probe.audio_tracks))
+            self.flags.append(
+                "source has %d audio tracks (game, mic and desktop are usually separate); track %d "
+                "was used — set audio_track in the config if that is the wrong one"
+                % (probe.audio_tracks, cfg.audio_track)
+            )
 
         transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language)
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))

@@ -49,6 +49,8 @@ class Config:
     # §4.5 rights: passed into the run, never inferred.
     rights_confirmed: bool = False
     third_party_music: bool = False
+    # Which audio stream to cut from: game capture, mic and desktop are often separate tracks.
+    audio_track: int = 0
     # Instagram's Graph API pulls the asset over HTTP, so it needs a public URL.
     public_asset_base_url: str | None = None
     output_dir: str = "out"
@@ -121,6 +123,7 @@ def from_dict(raw: dict) -> Config:
         language=raw.get("language"),
         rights_confirmed=bool(raw.get("rights_confirmed", False)),
         third_party_music=bool(raw.get("third_party_music", False)),
+        audio_track=int(raw.get("audio_track", 0)),
         public_asset_base_url=raw.get("public_asset_base_url") or os.getenv("PUBLIC_ASSET_BASE_URL"),
         output_dir=raw.get("output_dir") or "out",
     )

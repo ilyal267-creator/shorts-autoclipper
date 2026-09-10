@@ -82,4 +82,7 @@ watch the output of a run instead of taking the assertions' word for it.
   in front of `YOUTUBE_ACCESS_TOKEN` for unattended runs.
 - **Instagram needs a public URL** for the rendered file (`public_asset_base_url`) — the Graph API
   pulls the video rather than accepting an upload.
+- **Multi-track sources need `audio_track`.** Game captures often carry separate game, mic and
+  desktop streams; the run cuts from track 0 unless you say otherwise, and flags the choice
+  when there is more than one track so it is never silently lucky.
 - **TikTok defaults to `SELF_ONLY`** because unaudited apps can't post publicly.

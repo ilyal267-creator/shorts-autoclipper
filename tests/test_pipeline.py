@@ -160,6 +160,13 @@ def test_render_plan_matches_the_cut_list():
     assert "crop=607:1080" in graph  # 9:16 slice of a 1920x1080 source
     assert clip.duration == 28.0
 
+    # A multi-track capture must be pinned by index, not left to ffmpeg's pick.
+    assert "[0:a:0]atrim" in graph and "[0:v:0]trim" in graph
+    track2 = render.build_command(
+        clip, "in.mp4", Path("out/c.ass"), Path("out/c.mp4"), 1920, 1080, audio_track=2
+    )
+    assert "[0:a:2]atrim" in track2[track2.index("-filter_complex") + 1]
+
     lines = subtitle_lines([Word("boom", 0.0, 0.5)], emphasis=["boom"])
     ass = render.build_ass(lines, config_mod.DEFAULT_SUBTITLE_STYLE)
     assert r"{\c&H004DE1FF}boom{\r}" in ass  # highlight colour applied to the emphasis word

@@ -23,6 +23,7 @@ class Probe:
     duration: float
     width: int
     height: int
+    audio_tracks: int = 1
 
     @property
     def aspect(self) -> float:
@@ -42,19 +43,20 @@ def probe(video: str) -> Probe:
 
 def _probe_ffprobe(video: str) -> Probe:
     data = json.loads(
-        run(
-            [
-                "ffprobe", "-v", "error", "-print_format", "json",
-                "-show_format", "-select_streams", "v:0", "-show_streams", video,
-            ]
-        )
+        run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", video])
     )
     streams = data.get("streams") or []
-    if not streams:
+    video_streams = [s for s in streams if s.get("codec_type") == "video"]
+    if not video_streams:
         raise MediaError("no video stream in %s" % video)
-    stream = streams[0]
+    stream = video_streams[0]
     duration = float(data.get("format", {}).get("duration") or stream.get("duration") or 0)
-    return Probe(duration=duration, width=int(stream["width"]), height=int(stream["height"]))
+    return Probe(
+        duration=duration,
+        width=int(stream["width"]),
+        height=int(stream["height"]),
+        audio_tracks=sum(1 for s in streams if s.get("codec_type") == "audio"),
+    )
 
 
 def _probe_ffmpeg(video: str) -> Probe:
@@ -69,6 +71,7 @@ def _probe_ffmpeg(video: str) -> Probe:
         duration=int(hours) * 3600 + int(minutes) * 60 + float(seconds),
         width=int(size.group(1)),
         height=int(size.group(2)),
+        audio_tracks=len(re.findall(r"Stream #\d+:\d+.*: Audio:", text)),
     )
 
 

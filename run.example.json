@@ -38,6 +38,8 @@
     "required_disclaimers": []
   },
 
+  "audio_track": 0,
+
   "rights_confirmed": false,
   "third_party_music": false,
 

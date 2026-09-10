@@ -122,15 +122,26 @@ def audio_notes(clip: Clip) -> list[str]:
     return []
 
 
-def build_command(clip: Clip, source: str, ass_path: Path, out_path: Path, width: int, height: int) -> list[str]:
+def build_command(
+    clip: Clip,
+    source: str,
+    ass_path: Path,
+    out_path: Path,
+    width: int,
+    height: int,
+    audio_track: int = 0,
+) -> list[str]:
     keeps = clip.keeps
     if not keeps:
         raise media.MediaError("%s has nothing left after its cuts" % clip.clip_id)
 
     parts, labels = [], []
     for i, (start, end) in enumerate(keeps):
-        parts.append("[0:v]trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS[v%d]" % (start, end, i))
-        parts.append("[0:a]atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS[a%d]" % (start, end, i))
+        parts.append("[0:v:0]trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS[v%d]" % (start, end, i))
+        # Pinned by index: a bare [0:a] on a multi-track capture picks one by luck.
+        parts.append(
+            "[0:a:%d]atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS[a%d]" % (audio_track, start, end, i)
+        )
         labels.append("[v%d][a%d]" % (i, i))
     parts.append("%sconcat=n=%d:v=1:a=1[vc][aout]" % ("".join(labels), len(keeps)))
     parts.append(
@@ -167,5 +178,7 @@ def render(clip: Clip, cfg: Config, width: int, height: int) -> str:
     ass_path.write_text(build_ass(clip.subtitles, cfg.subtitle_style), encoding="utf-8")
 
     out_path = out_dir / ("%s.mp4" % clip.clip_id)
-    media.run(build_command(clip, cfg.source_video, ass_path, out_path, width, height))
+    media.run(
+        build_command(clip, cfg.source_video, ass_path, out_path, width, height, cfg.audio_track)
+    )
     return str(out_path)
