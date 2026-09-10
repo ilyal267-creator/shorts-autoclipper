@@ -95,12 +95,21 @@ def timeline(transcript: Transcript, chunk_seconds: float = 6.0) -> str:
     return "\n".join(lines)
 
 
-def snap(value: float, transcript: Transcript, edge: str) -> float:
-    """Pull a model-chosen boundary onto the nearest word edge so a cut never clips a syllable."""
+SNAP_TOLERANCE = 0.5
+
+
+def snap(value: float, transcript: Transcript, edge: str, tolerance: float = SNAP_TOLERANCE) -> float:
+    """Nudge a boundary onto a word edge so a cut never clips a syllable.
+
+    Only a nudge. Past `tolerance` the nearest word is not what the boundary was aiming at —
+    an out-point set after the last word deliberately holds on the action, and dragging it
+    back across the silence would shorten the clip the model sized on purpose.
+    """
     edges = [w.start for w in transcript.words] if edge == "start" else [w.end for w in transcript.words]
     if not edges:
         return value
-    return min(edges, key=lambda e: abs(e - value))
+    nearest = min(edges, key=lambda e: abs(e - value))
+    return nearest if abs(nearest - value) <= tolerance else value
 
 
 # --------------------------------------------------------------------------- §4.2 + §4.3

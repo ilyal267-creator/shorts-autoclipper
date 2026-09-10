@@ -135,6 +135,23 @@ def test_merge_strays_reunites_a_word_with_its_phrase():
     assert len(over) == 2
 
 
+def test_snap_nudges_a_boundary_but_never_drags_it_across_silence():
+    from shorts import agent
+    from shorts.transcribe import Transcript
+
+    words = [Word("a", 41.8, 42.1), Word("b", 50.6, 50.9)]  # then an 8s gap to the clip's end
+    transcript = Transcript(words=words, language="en", duration=61.7, source="test")
+
+    # within tolerance: pulled onto the word edge so the cut lands cleanly
+    assert agent.snap(42.0, transcript, "start") == 41.8
+    assert agent.snap(50.7, transcript, "end") == 50.9
+
+    # beyond it: an out-point held past the last word survives, and so does the clip's length
+    assert agent.snap(53.0, transcript, "end") == 53.0
+    kept = 53.0 - agent.snap(41.8, transcript, "start")
+    assert abs(kept - 11.2) < 1e-6  # the 11.2s the model sized, not 9.1s after a drag
+
+
 def test_validate_rejects_short_clips_and_near_duplicates():
     a = Clip("clip_1", 0, 40, [], {}, "preserve", "", "high")
     b = Clip("clip_2", 5, 45, [], {}, "preserve", "", "high")
