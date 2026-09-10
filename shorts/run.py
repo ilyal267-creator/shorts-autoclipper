@@ -156,7 +156,7 @@ class Run:
             return self._clip_row(clip, {p["platform"]: {"status": "excluded", "reason": clip.excluded_reason} for p in cfg.connected_accounts})
 
         emphasis = clip.copy.get("tiktok", {}).get("emphasis_words", [])
-        clip.subtitles = subtitle_lines(words, emphasis)
+        clip.subtitles = subtitle_lines(words, emphasis, clip_end=clip.duration)
         for note in rendering.audio_notes(clip):
             self.flags.append(note)
 
@@ -220,6 +220,9 @@ class Run:
             "start": clip.start,
             "end": clip.end,
             "duration": clip.duration,
+            # Without these the summary cannot explain why duration < end - start, and the
+            # clip cannot be rebuilt from its own record.
+            "cuts": [{"start": s, "end": e} for s, e in clip.cuts],
             "selection_reason": clip.selection_reason,
             "confidence": clip.confidence,
             "asset_ref": clip.asset_ref,

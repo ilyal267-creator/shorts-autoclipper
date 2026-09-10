@@ -97,11 +97,55 @@ def retime(words: list[Word], keeps: list[tuple[float, float]]) -> list[Word]:
     return out
 
 
+MIN_DISPLAY = 0.5  # seconds a line must be on screen to be readable at all
+
+
+def tidy_lines(
+    lines: list[Line],
+    clip_end: float | None = None,
+    min_display: float = MIN_DISPLAY,
+    max_gap: float = 0.6,
+) -> list[Line]:
+    """Give every line time to be read: stretch it, merge it, or — if the cut sliced through
+    a phrase at the clip's edge — drop the leftover word rather than flash it for 0.1s."""
+    lines = [Line(line.text, line.start, line.end, list(line.emphasis)) for line in lines]
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.end - line.start >= min_display:
+            index += 1
+            continue
+
+        # 1. stretch into whatever room follows, without running into the next line
+        ceiling = lines[index + 1].start if index + 1 < len(lines) else clip_end
+        wanted = line.start + min_display
+        line.end = min(wanted, ceiling) if ceiling is not None else wanted
+        if line.end - line.start >= min_display:
+            index += 1
+            continue
+
+        # 2. still too brief — fold it into a neighbour it runs together with
+        previous = lines[index - 1] if index else None
+        following = lines[index + 1] if index + 1 < len(lines) else None
+        if previous is not None and line.start - previous.end <= max_gap:
+            previous.text = "%s %s" % (previous.text, line.text)
+            previous.end = max(previous.end, line.end)
+            previous.emphasis += line.emphasis
+        elif following is not None and following.start - line.end <= max_gap:
+            following.text = "%s %s" % (line.text, following.text)
+            following.start = line.start
+            following.emphasis = line.emphasis + following.emphasis
+        # 3. otherwise it is an orphan against the clip boundary: drop it
+        del lines[index]
+    return lines
+
+
 def subtitle_lines(
     words: list[Word],
     emphasis: list[str] | None = None,
     max_words: int = 5,
     max_gap: float = 0.6,
+    clip_end: float | None = None,
 ) -> list[Line]:
     """3-6 word chunks broken on natural pauses and sentence ends, not dumped by sentence."""
     wanted = {w.strip(".,!?").lower() for w in (emphasis or []) if w.strip()}
@@ -129,7 +173,7 @@ def subtitle_lines(
         if len(bucket) >= max_words or word.text.rstrip().endswith(tuple(SENTENCE_END)):
             flush()
     flush()
-    return lines
+    return tidy_lines(lines, clip_end=clip_end, max_gap=max_gap)
 
 
 def validate(clip: Clip, length_range: tuple[int, int], others: list[Clip]) -> list[str]:

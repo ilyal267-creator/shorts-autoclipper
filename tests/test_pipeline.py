@@ -66,6 +66,27 @@ def test_subtitle_lines_chunk_and_mark_emphasis():
     assert any("w3" in line.emphasis for line in lines)
 
 
+def test_tidy_lines_gives_every_line_time_to_be_read():
+    from shorts.clips import Line, tidy_lines
+
+    # a word the cut sliced off the front, then a normal line
+    merged = tidy_lines([Line("Cisco?", 0.0, 0.10), Line("What's on When", 0.40, 2.54)], clip_end=3.0)
+    assert len(merged) == 1
+    assert merged[0].text == "Cisco? What's on When" and merged[0].start == 0.0
+
+    # an isolated short word with room after it is stretched, never discarded
+    stretched = tidy_lines([Line("later", 8.0, 8.4)], clip_end=20.0)
+    assert stretched[0].text == "later" and stretched[0].end == 8.5
+
+    # the leftover word at the clip's out-point has nowhere to go, so it goes
+    orphan = tidy_lines([Line("I'm magic, man.", 7.5, 8.79), Line("I", 11.65, 11.77)], clip_end=11.77)
+    assert [line.text for line in orphan] == ["I'm magic, man."]
+
+    # emphasis survives a merge
+    kept = tidy_lines([Line("all.", 5.7, 5.8, ["all."]), Line("Okay?", 5.9, 6.0)], clip_end=9.0)
+    assert "all." in kept[0].emphasis
+
+
 def test_validate_rejects_short_clips_and_near_duplicates():
     a = Clip("clip_1", 0, 40, [], {}, "preserve", "", "high")
     b = Clip("clip_2", 5, 45, [], {}, "preserve", "", "high")
