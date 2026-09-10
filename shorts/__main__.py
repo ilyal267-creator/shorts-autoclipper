@@ -129,17 +129,21 @@ def cmd_doctor(args) -> int:
 
 
 def printable(*streams) -> None:
-    """Never let a caption's emoji kill the process on a legacy console.
+    """Make output survive a caption's emoji, without corrupting it.
 
-    The encoding is left alone — a modern terminal is already UTF-8 and prints the character;
-    a cp1252 one shows an escape like \\U0001f447 instead of raising UnicodeEncodeError.
-    Forcing UTF-8 here would only move the mangling into the terminal.
+    Redirected or piped: UTF-8, because stdout carries the run summary as JSON and a consumer
+    expects to parse it — an escape like \\U0001f447 would be invalid JSON, not a fallback.
+    A console: keep its own encoding and degrade to escapes, so a legacy code page shows
+    something readable instead of raising UnicodeEncodeError mid-run.
     """
     for stream in streams:
         try:
-            stream.reconfigure(errors="backslashreplace")
+            if stream.isatty():
+                stream.reconfigure(errors="backslashreplace")
+            else:
+                stream.reconfigure(encoding="utf-8")
         except (AttributeError, ValueError, OSError):
-            pass  # a pipe, a StringIO under test, or a stream that refuses — printing still works
+            pass  # a StringIO under test, or a stream that refuses — printing still works
 
 
 def main(argv=None) -> int:

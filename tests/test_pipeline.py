@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -190,27 +191,44 @@ def test_load_env_reads_a_powershell_written_file():
         assert load_env(broken) == []
 
 
-def test_printable_survives_an_emoji_on_a_legacy_console():
+def test_printable_keeps_piped_output_parseable_and_a_console_alive():
     import io
 
     from shorts.__main__ import printable
 
-    raw = io.BytesIO()
-    console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    class Stream(io.TextIOWrapper):
+        def __init__(self, tty):
+            super().__init__(io.BytesIO(), encoding="cp1252", errors="strict")
+            self._tty = tty
+
+        def isatty(self):
+            return self._tty
+
+    payload = '{"caption": "ship it 👇 — now"}'
+
+    # Before the fix, cp1252 rejected the emoji outright.
     try:
-        console.write("caption 👇")
-        console.flush()
-        raise AssertionError("expected cp1252 to reject the emoji before the fix")
+        bare = Stream(tty=True)
+        bare.write(payload)
+        bare.flush()
+        raise AssertionError("expected cp1252 to reject the emoji")
     except UnicodeEncodeError:
         pass
 
-    console = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    # Piped: must stay valid UTF-8 JSON — an escape here would break the consumer.
+    piped = Stream(tty=False)
+    printable(piped)
+    piped.write(payload)
+    piped.flush()
+    assert json.loads(piped.buffer.getvalue().decode("utf-8"))["caption"] == "ship it 👇 — now"
+
+    # A console: never raise, degrade to an escape.
+    console = Stream(tty=True)
     printable(console)
-    console.write("caption 👇 — done")  # must not raise
+    console.write(payload)
     console.flush()
-    written = console.buffer.getvalue().decode("cp1252")
-    assert "\\U0001f447" in written  # escaped, not lost
-    assert "—" in written  # cp1252 can represent this one, so it stays readable
+    shown = console.buffer.getvalue().decode("cp1252")
+    assert "\\U0001f447" in shown and "—" in shown
 
     printable(None, object())  # streams that cannot reconfigure are ignored, not fatal
 
