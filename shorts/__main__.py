@@ -12,13 +12,28 @@ from pathlib import Path
 from . import agent, config as config_mod, run as run_mod
 
 
+def decode_env(data: bytes) -> str:
+    """PowerShell's `>>` writes UTF-16; cmd and editors write UTF-8, sometimes with a BOM."""
+    for bom, encoding in ((b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"), (b"\xef\xbb\xbf", "utf-8-sig")):
+        if data.startswith(bom):
+            return data.decode(encoding, errors="replace")
+    return data.decode("utf-8", errors="replace")
+
+
 def load_env(path: str | Path = ".env") -> list[str]:
-    """Read KEY=value lines into the environment. Real environment variables win."""
+    """Read KEY=value lines into the environment. Real environment variables win.
+
+    A malformed .env must never take the CLI down — it is a convenience, not the config.
+    """
     source = Path(path)
     if not source.exists():
         return []
+    try:
+        text = decode_env(source.read_bytes())
+    except OSError:
+        return []
     loaded = []
-    for line in source.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -113,9 +128,22 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+def printable(*streams) -> None:
+    """Never let a caption's emoji kill the process on a legacy console.
+
+    The encoding is left alone — a modern terminal is already UTF-8 and prints the character;
+    a cp1252 one shows an escape like \\U0001f447 instead of raising UnicodeEncodeError.
+    Forcing UTF-8 here would only move the mangling into the terminal.
+    """
+    for stream in streams:
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass  # a pipe, a StringIO under test, or a stream that refuses — printing still works
+
+
 def main(argv=None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):  # the summary is UTF-8; Windows consoles often aren't
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    printable(sys.stdout, sys.stderr)
     load_env(os.getenv("SHORTS_ENV_FILE", ".env"))
     parser = argparse.ArgumentParser(prog="shorts", description="Shorts auto-clipper & publisher")
     sub = parser.add_subparsers(dest="command", required=True)

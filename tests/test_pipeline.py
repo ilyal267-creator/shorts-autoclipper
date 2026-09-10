@@ -165,6 +165,56 @@ def test_render_plan_matches_the_cut_list():
     assert ",424,1" in ass  # MarginV clears the bottom 20% safe zone
 
 
+def test_load_env_reads_a_powershell_written_file():
+    """`echo "K=v" >> .env` in PowerShell produces UTF-16; it must not crash the CLI."""
+    import os
+    import tempfile
+
+    from shorts.__main__ import load_env
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for label, encoding in (("UTF16", "utf-16"), ("UTF8BOM", "utf-8-sig"), ("PLAIN", "utf-8")):
+            key = "SHORTS_TEST_%s" % label
+            env_file = Path(tmp) / ("%s.env" % label)
+            env_file.write_text("%s=value-%s\n" % (key, label), encoding=encoding)
+            os.environ.pop(key, None)
+            try:
+                assert load_env(env_file) == [key], label
+                assert os.environ[key] == "value-%s" % label, label
+            finally:
+                os.environ.pop(key, None)
+
+        # Undecodable bytes are survivable: no exception, and nothing bogus exported.
+        broken = Path(tmp) / "broken.env"
+        broken.write_bytes(b"\x80\x81\x82 not really text\n")
+        assert load_env(broken) == []
+
+
+def test_printable_survives_an_emoji_on_a_legacy_console():
+    import io
+
+    from shorts.__main__ import printable
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    try:
+        console.write("caption 👇")
+        console.flush()
+        raise AssertionError("expected cp1252 to reject the emoji before the fix")
+    except UnicodeEncodeError:
+        pass
+
+    console = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    printable(console)
+    console.write("caption 👇 — done")  # must not raise
+    console.flush()
+    written = console.buffer.getvalue().decode("cp1252")
+    assert "\\U0001f447" in written  # escaped, not lost
+    assert "—" in written  # cp1252 can represent this one, so it stays readable
+
+    printable(None, object())  # streams that cannot reconfigure are ignored, not fatal
+
+
 def test_load_env_does_not_shadow_real_variables():
     import os
     import tempfile
