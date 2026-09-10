@@ -311,6 +311,17 @@ def test_render_plan_matches_the_cut_list():
     assert r"{\c&H004DE1FF}{\c&H004DE1FF}" not in doubled
     assert doubled.count(r"{\c&H004DE1FF}bomb{\r}") == 1
 
+    # the same word with and without punctuation is still one word, and must not nest
+    repeated = render.build_ass(
+        [Line("The biggest, biggest, biggest threat", 0.0, 2.0, ["biggest,", "biggest"])],
+        config_mod.DEFAULT_SUBTITLE_STYLE,
+    )
+    assert r"{\c&H004DE1FF}{\c&H004DE1FF}" not in repeated
+    assert repeated.count(r"{\c&H004DE1FF}") == 1  # first appearance only, not every repeat
+    assert "biggest, biggest, biggest threat" in repeated.replace(r"{\c&H004DE1FF}", "").replace(
+        r"{\r}", ""
+    )  # the words themselves survive untouched
+
 
 def test_audio_extract_pins_the_same_track_the_render_uses():
     from shorts import media

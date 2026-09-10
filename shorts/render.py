@@ -35,12 +35,26 @@ def _ass_time(seconds: float) -> str:
 
 
 def _ass_text(line: Line, highlight: str) -> str:
+    """Wrap the first appearance of each emphasis word in the highlight colour.
+
+    Token by token, never by substring: emphasis can arrive as both "biggest" and "biggest,"
+    and replacing text meant matching inside a tag the previous pass had just written —
+    "{\\c...}{\\c...}biggest{\\r},{\\r}". Whole-word matching cannot nest.
+    """
     body = line.text.replace("{", "(").replace("}", ")").replace("\n", " ")
-    # Merging lines concatenates their emphasis, so the same word can arrive twice. Highlighting
-    # it twice nests the override tags around the text already wrapped by the first pass.
-    for word in dict.fromkeys(line.emphasis):
-        body = body.replace(word, r"{\c%s}%s{\r}" % (highlight, word), 1)
-    return body
+    pending = {word.strip(".,!?…").lower() for word in line.emphasis if word.strip()}
+    if not pending:
+        return body
+
+    out = []
+    for token in body.split(" "):
+        key = token.strip(".,!?…").lower()
+        if key in pending:
+            pending.discard(key)
+            out.append(r"{\c%s}%s{\r}" % (highlight, token))
+        else:
+            out.append(token)
+    return " ".join(out)
 
 
 def build_ass(lines: list[Line], style: dict) -> str:
