@@ -20,3 +20,16 @@ jobs:
       # No install step: the checks are stdlib-only. anthropic, requests and
       # ffmpeg are imported lazily, inside the functions that need them.
       - run: python tests/test_pipeline.py
+
+  render:
+    # Cuts, crops and burns captions for real, then inspects the output — the
+    # half of the pipeline the unit checks can only describe.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg
+        run: command -v ffmpeg || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
+      - run: python tests/test_render_e2e.py
