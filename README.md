@@ -82,6 +82,9 @@ watch the output of a run instead of taking the assertions' word for it.
   in front of `YOUTUBE_ACCESS_TOKEN` for unattended runs.
 - **Instagram needs a public URL** for the rendered file (`public_asset_base_url`) — the Graph API
   pulls the video rather than accepting an upload.
+- **Silent or non-speech audio invents words.** Whisper will produce "You You You" from a
+  muted track and can grind for minutes on one. Voice-activity filtering is on by default;
+  `SHORTS_WHISPER_VAD=0` turns it off. Measured lossless on real narration (91/91 words).
 - **Multi-track sources need `audio_track`.** Game captures often carry separate game, mic and
   desktop streams; the run cuts from track 0 unless you say otherwise, and flags the choice
   when there is more than one track so it is never silently lucky.
