@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -58,7 +60,12 @@ def load_words(raw: dict) -> list[Word]:
     return words
 
 
-def transcribe(video: str, transcript_path: str | None = None, language: str | None = None) -> Transcript:
+def transcribe(
+    video: str,
+    transcript_path: str | None = None,
+    language: str | None = None,
+    audio_track: int = 0,
+) -> Transcript:
     if transcript_path:
         raw = json.loads(Path(transcript_path).read_text(encoding="utf-8"))
         words = load_words(raw)
@@ -79,9 +86,14 @@ def transcribe(video: str, transcript_path: str | None = None, language: str | N
 
     size = os.getenv("SHORTS_WHISPER_MODEL", "base")
 
+    # Extract the chosen stream rather than letting the decoder pick its own default: the
+    # render cuts from `audio_track`, so the transcript has to come from the same one.
+    scratch = tempfile.mkdtemp(prefix="shorts-audio-")
+    audio = media.extract_audio(video, audio_track, str(Path(scratch) / "track.wav"))
+
     def run(device: str, compute: str):
         model = WhisperModel(size, device=device, compute_type=compute)
-        segments, info = model.transcribe(video, word_timestamps=True, language=language)
+        segments, info = model.transcribe(audio, word_timestamps=True, language=language)
         # `segments` is lazy — the transcription (and any CUDA failure) happens right here.
         words = [
             Word(text=w.word.strip(), start=w.start, end=w.end)
@@ -94,20 +106,26 @@ def transcribe(video: str, transcript_path: str | None = None, language: str | N
     device = os.getenv("SHORTS_WHISPER_DEVICE", "auto")
     compute = os.getenv("SHORTS_WHISPER_COMPUTE", "int8")
     try:
-        words, info = run(device, compute)
-        used = device
-    except (RuntimeError, ValueError) as exc:
-        # A machine can advertise a GPU and still lack the CUDA runtime ctranslate2 wants.
-        if device == "cpu":
-            raise TranscriptionError("transcription failed: %s" % exc) from exc
-        words, info = run("cpu", "int8")
-        used = "cpu"
+        try:
+            words, info = run(device, compute)
+            used = device
+        except (RuntimeError, ValueError) as exc:
+            # A machine can advertise a GPU and still lack the CUDA runtime ctranslate2 wants.
+            if device == "cpu":
+                raise TranscriptionError("transcription failed: %s" % exc) from exc
+            words, info = run("cpu", "int8")
+            used = "cpu"
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
     if not words:
-        raise TranscriptionError("transcription returned no words")
+        raise TranscriptionError(
+            "transcription returned no words from audio track %d — if the source has several "
+            "tracks, the speech may be on a different one" % audio_track
+        )
     return Transcript(
         words=words,
         language=language or info.language,
         duration=float(info.duration or media.probe(video).duration),
-        source="faster-whisper (%s)" % used,
+        source="faster-whisper (%s, track %d)" % (used, audio_track),
     )

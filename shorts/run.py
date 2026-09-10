@@ -64,7 +64,7 @@ class Run:
                 % (probe.audio_tracks, cfg.audio_track)
             )
 
-        transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language)
+        transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language, cfg.audio_track)
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))
 
         plan = agent.plan_clips(cfg, transcript, probe.width, probe.height)

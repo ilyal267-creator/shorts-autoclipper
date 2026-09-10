@@ -75,6 +75,23 @@ def _probe_ffmpeg(video: str) -> Probe:
     )
 
 
+def audio_extract_cmd(video: str, track: int, out_path: str) -> list[str]:
+    """Pull one audio stream down to what whisper wants: 16kHz mono PCM."""
+    return [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", video,
+        "-map", "0:a:%d" % track,
+        "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
+        out_path,
+    ]
+
+
+def extract_audio(video: str, track: int, out_path: str) -> str:
+    require_ffmpeg()
+    run(audio_extract_cmd(video, track, out_path))
+    return out_path
+
+
 def run(cmd: list[str]) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:

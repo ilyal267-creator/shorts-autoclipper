@@ -173,6 +173,21 @@ def test_render_plan_matches_the_cut_list():
     assert ",424,1" in ass  # MarginV clears the bottom 20% safe zone
 
 
+def test_audio_extract_pins_the_same_track_the_render_uses():
+    from shorts import media
+
+    cmd = media.audio_extract_cmd("in.mkv", 2, "out.wav")
+    assert cmd[cmd.index("-map") + 1] == "0:a:2"  # not the decoder's own default pick
+    assert "16000" in cmd and "pcm_s16le" in cmd  # what whisper wants, mono 16kHz
+
+    clip = Clip("clip_1", 0, 20, [], {"mode": "center_crop"}, "preserve", "", "high")
+    graph = render.build_command(
+        clip, "in.mkv", Path("a.ass"), Path("o.mp4"), 1920, 1080, audio_track=2
+    )
+    filtergraph = graph[graph.index("-filter_complex") + 1]
+    assert "[0:a:2]" in filtergraph  # transcript and render read the same stream
+
+
 def test_load_env_reads_a_powershell_written_file():
     """`echo "K=v" >> .env` in PowerShell produces UTF-16; it must not crash the CLI."""
     import os
