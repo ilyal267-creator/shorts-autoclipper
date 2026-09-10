@@ -13,8 +13,8 @@ jobs:
         # The floor from pyproject's requires-python, and a current release.
         python-version: ["3.10", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       # No install step: the checks are stdlib-only. anthropic, requests and
@@ -26,8 +26,8 @@ jobs:
     # half of the pipeline the unit checks can only describe.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install ffmpeg
@@ -37,7 +37,7 @@ jobs:
           SHORTS_E2E_OUT: ${{ runner.temp }}/render-check
       - name: Keep the rendered clips
         if: always()  # a failed render is exactly when you want to watch it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rendered-clips
           path: ${{ runner.temp }}/render-check/out
