@@ -67,11 +67,43 @@ def cmd_drain(args) -> int:
     return 0
 
 
+TLS_HINT = (
+    " — TLS is being intercepted (proxy or antivirus). Point SSL_CERT_FILE at that CA bundle "
+    "for the model calls, and REQUESTS_CA_BUNDLE for the publishers"
+)
+
+
+def _reach(get, url: str) -> str:
+    """A 401 counts as reachable — TLS worked and only the credential is missing."""
+    try:
+        return "ok (HTTP %d)" % get(url, timeout=15).status_code
+    except Exception as exc:
+        blob = (type(exc).__name__ + str(exc)).upper()
+        return "FAILED: %s%s" % (type(exc).__name__, TLS_HINT if "SSL" in blob or "CERTIFICATE" in blob else "")
+
+
+def _api_reachable() -> str:
+    # httpx is what the Anthropic SDK uses, so check the path the run will actually take.
+    try:
+        import httpx
+
+        return _reach(httpx.get, "https://api.anthropic.com/v1/models")
+    except ImportError:
+        pass
+    try:
+        import requests
+
+        return _reach(requests.get, "https://api.anthropic.com/v1/models")
+    except ImportError:
+        return "unknown (neither httpx nor requests installed)"
+
+
 def cmd_doctor(args) -> int:
     rows = [
         ("ffmpeg", bool(shutil.which("ffmpeg"))),
         ("ffprobe", bool(shutil.which("ffprobe"))),
         ("model provider", agent.provider()),
+        ("api.anthropic.com", _api_reachable()),
         ("TIKTOK_ACCESS_TOKEN", bool(os.getenv("TIKTOK_ACCESS_TOKEN"))),
         ("IG_ACCESS_TOKEN", bool(os.getenv("IG_ACCESS_TOKEN"))),
         ("YOUTUBE_ACCESS_TOKEN", bool(os.getenv("YOUTUBE_ACCESS_TOKEN"))),
