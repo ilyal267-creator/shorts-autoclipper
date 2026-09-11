@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class MediaError(Exception):
@@ -20,10 +20,22 @@ def require_ffmpeg() -> None:
 
 @dataclass
 class Probe:
+    """Dimensions as the video is *shown*, not as the pixels are stored."""
+
     duration: float
     width: int
     height: int
-    audio_tracks: int = 1
+    # Codec per audio stream, in ffmpeg's 0:a:N order. "none" means ffmpeg has no decoder
+    # for it — an iPhone's spatial-audio "apac" track, for one.
+    audio_codecs: list[str] = field(default_factory=lambda: ["aac"])
+
+    @property
+    def audio_tracks(self) -> int:
+        """Streams that can actually be cut from."""
+        return sum(1 for codec in self.audio_codecs if codec != "none")
+
+    def can_decode(self, track: int) -> bool:
+        return 0 <= track < len(self.audio_codecs) and self.audio_codecs[track] != "none"
 
     @property
     def aspect(self) -> float:
@@ -32,6 +44,12 @@ class Probe:
     @property
     def is_vertical(self) -> bool:
         return self.aspect < 1.0
+
+
+def displayed(width: int, height: int, rotation: float) -> tuple[int, int]:
+    """A phone stores portrait video as landscape pixels plus a rotation flag. ffmpeg honours
+    the flag when it decodes, so every size decision has to use the rotated shape too."""
+    return (height, width) if round(abs(rotation)) % 180 == 90 else (width, height)
 
 
 def probe(video: str) -> Probe:
@@ -51,11 +69,18 @@ def _probe_ffprobe(video: str) -> Probe:
         raise MediaError("no video stream in %s" % video)
     stream = video_streams[0]
     duration = float(data.get("format", {}).get("duration") or stream.get("duration") or 0)
+    rotation = float((stream.get("tags") or {}).get("rotate") or 0)
+    for side in stream.get("side_data_list") or []:
+        if "rotation" in side:
+            rotation = float(side["rotation"])
+    width, height = displayed(int(stream["width"]), int(stream["height"]), rotation)
     return Probe(
         duration=duration,
-        width=int(stream["width"]),
-        height=int(stream["height"]),
-        audio_tracks=sum(1 for s in streams if s.get("codec_type") == "audio"),
+        width=width,
+        height=height,
+        audio_codecs=[
+            s.get("codec_name") or "none" for s in streams if s.get("codec_type") == "audio"
+        ],
     )
 
 
@@ -67,11 +92,15 @@ def _probe_ffmpeg(video: str) -> Probe:
     if not size or not clock:
         raise MediaError("could not read %s: %s" % (video, text.strip()[-400:]))
     hours, minutes, seconds = clock.groups()
+    turn = re.search(r"displaymatrix: rotation of (-?\d+(?:\.\d+)?) degrees", text)
+    width, height = displayed(
+        int(size.group(1)), int(size.group(2)), float(turn.group(1)) if turn else 0.0
+    )
     return Probe(
         duration=int(hours) * 3600 + int(minutes) * 60 + float(seconds),
-        width=int(size.group(1)),
-        height=int(size.group(2)),
-        audio_tracks=len(re.findall(r"Stream #\d+:\d+.*: Audio:", text)),
+        width=width,
+        height=height,
+        audio_codecs=re.findall(r"Stream #\d+:\d+[^\n]*?: Audio: (\w+)", text),
     )
 
 

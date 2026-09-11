@@ -503,6 +503,39 @@ def test_youtube_sign_in_uses_pkce_and_asks_for_a_refresh_token():
                     os.environ[key] = value
 
 
+def test_probe_reads_a_phone_video_the_way_it_is_shown():
+    import shutil
+    import subprocess
+    from unittest import mock
+
+    from shorts import media
+
+    # stored landscape, flagged to display portrait: size decisions must use the rotated shape
+    assert media.displayed(3840, 2160, -90) == (2160, 3840)
+    assert media.displayed(3840, 2160, 270.0) == (2160, 3840)
+    assert media.displayed(1080, 1920, 180) == (1080, 1920)
+    assert media.displayed(1920, 1080, 0) == (1920, 1080)
+
+    # the banner an iPhone 15 .mov actually produces: HEVC, -90 rotation, aac + spatial "apac"
+    banner = (
+        "  Duration: 00:00:02.77, start: 0.000000, bitrate: 51629 kb/s\n"
+        "  Stream #0:0[0x1](und): Video: hevc (Main 10) (hvc1 / 0x31637668), "
+        "yuv420p10le(tv, bt2020nc/bt2020/arib-std-b67), 3840x2160, 50904 kb/s, 29.98 fps\n"
+        "      displaymatrix: rotation of -90.00 degrees\n"
+        "  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo\n"
+        "  Stream #0:2[0x3](und): Audio: none (apac / 0x63617061), 48000 Hz, 4.0, 413 kb/s\n"
+    )
+    fake = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=banner)
+    with mock.patch.object(shutil, "which", side_effect=lambda b: None if b == "ffprobe" else b), \
+            mock.patch.object(subprocess, "run", return_value=fake):
+        probe = media.probe("IMG_2042.mov")
+
+    assert (probe.width, probe.height) == (2160, 3840) and probe.is_vertical
+    assert probe.audio_codecs == ["aac", "none"]
+    assert probe.audio_tracks == 1  # the spatial track cannot be cut from
+    assert probe.can_decode(0) and not probe.can_decode(1) and not probe.can_decode(5)
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

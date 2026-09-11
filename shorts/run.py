@@ -59,10 +59,11 @@ class Run:
         )
         if probe.audio_tracks == 0:
             raise media.MediaError("%s has no audio track to cut from" % cfg.source_video)
-        if cfg.audio_track >= probe.audio_tracks:
+        if not probe.can_decode(cfg.audio_track):
             raise media.MediaError(
-                "audio_track %d does not exist — the source has %d track(s), numbered from 0"
-                % (cfg.audio_track, probe.audio_tracks)
+                "audio_track %d cannot be cut from — the source's audio streams are %s, "
+                "numbered from 0, and \"none\" means ffmpeg has no decoder for it"
+                % (cfg.audio_track, probe.audio_codecs)
             )
         if probe.audio_tracks > 1:
             self.note("using audio track %d of %d" % (cfg.audio_track, probe.audio_tracks))
