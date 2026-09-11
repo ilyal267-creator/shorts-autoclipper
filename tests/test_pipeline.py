@@ -585,6 +585,23 @@ def test_narration_is_timed_budgeted_and_mixed_over_the_clip():
     assert spread[0].start == 1.0 and spread[-1].end <= 5.0  # inside the span actually spoken
     assert all(a.end <= b.start for a, b in zip(spread, spread[1:]))  # in order, no overlap
 
+    # nothing configured: each platform gets its own default, with no call to the account
+    from unittest import mock
+
+    platforms = ["instagram_reels", "tiktok", "youtube_shorts"]
+    with mock.patch.object(voice, "list_voices", side_effect=AssertionError("should not be needed")):
+        assert voice.pick_voices(platforms, {}) == voice.DEFAULT_VOICES
+        # a configured voice wins, and the others keep their defaults
+        picked = voice.pick_voices(platforms, {"tiktok": "custom-id"})
+        assert picked["tiktok"] == "custom-id"
+        assert picked["youtube_shorts"] == voice.DEFAULT_VOICES["youtube_shorts"]
+    # a default already taken by another platform is not reused; the account fills the gap
+    liam = voice.DEFAULT_VOICES["tiktok"]
+    with mock.patch.object(voice, "list_voices", return_value=[{"voice_id": liam}, {"voice_id": "spare"}]):
+        picked = voice.pick_voices(platforms, {"instagram_reels": liam})
+        assert picked["instagram_reels"] == liam and picked["tiktok"] == "spare"
+        assert len(set(picked.values())) == 3  # never the same voice on two platforms
+
     # the script has to end before the clip does
     assert voice.word_budget(10.0) == 24 and voice.word_budget(0.5) == 4
 

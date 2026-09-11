@@ -44,9 +44,12 @@ never compete, and -14 dB when it is music or ambience. `original_audio_db` over
 YouTube uploads declare the synthetic voice (`containsSyntheticMedia`) unless `disclose` is false.
 
 ```bash
-python -m shorts voices   # your account's voices; set voiceover.voices per platform, or leave
-                          # it empty and the run picks three different ones
+python -m shorts voices   # your account's voices, to override the defaults per platform
 ```
+
+Left unset, TikTok gets **Liam** (energetic, young), Reels **Alice** (clear, a touch more
+polished) and Shorts **Brian** (deep, resonant) — ElevenLabs built-ins every account has, each
+matched to its platform's tone. Set `voiceover.voices.<platform>` to any voice id to replace one.
 
 Needs `ELEVENLABS_API_KEY` in `.env`. The default model is `eleven_v3`, ElevenLabs' most
 natural-sounding voice model at the time of writing. Narration currently needs a source with

@@ -81,9 +81,23 @@ def list_voices() -> list[dict]:
     ]
 
 
+# ElevenLabs' built-in voices, open to every account, each matched to its platform's register
+# (spec §5): TikTok casual and fast, Reels a touch more polished, Shorts more informative.
+DEFAULT_VOICES = {
+    "tiktok": "TX3LPaxmHKxFdv7VOQHJ",  # Liam — energetic, young, made for social
+    "instagram_reels": "Xb7hH8MSUJpSbSDYk0k2",  # Alice — clear, engaging
+    "youtube_shorts": "nPczCjzI2devNBz1zQrb",  # Brian — deep, resonant
+}
+
+
 def pick_voices(platforms: list[str], configured: dict) -> dict[str, str]:
-    """The configured voice per platform, filling any gap with a distinct voice from the account."""
+    """The configured voice per platform, then the platform's default, then any unused voice
+    on the account — never the same voice on two platforms."""
     chosen = {p: configured[p] for p in platforms if configured.get(p)}
+    for p in platforms:
+        default = DEFAULT_VOICES.get(p)
+        if p not in chosen and default and default not in chosen.values():
+            chosen[p] = default
     missing = [p for p in platforms if p not in chosen]
     if missing:
         pool = [v["voice_id"] for v in list_voices() if v["voice_id"] not in chosen.values()]
