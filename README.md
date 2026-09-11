@@ -30,6 +30,29 @@ call for screen recordings, slides and gameplay, where any 9:16 slice throws awa
 frame. Since the planner reads the transcript and never sees the picture, `reframe_mode` in the
 config forces one framing on every clip; set it to `fit` for that kind of source.
 
+### Voiceover
+
+With `voiceover.enabled`, Claude writes a narration script per clip *and per platform*, and an
+ElevenLabs voice reads it: a different voice on TikTok, Reels and Shorts, so each post sounds
+native and none is a copy of another. Scripts are held to the clip's length (about 2.4 words a
+second) so the voice finishes before the picture does. Each platform gets its own render, and
+the captions follow the narration, not the original speech: word timings come from ElevenLabs'
+alignment, or from whisper on the generated audio with the script supplying the words.
+
+The clip's own sound stays underneath: at -32 dB when someone is speaking in it, so two voices
+never compete, and -14 dB when it is music or ambience. `original_audio_db` overrides both.
+YouTube uploads declare the synthetic voice (`containsSyntheticMedia`) unless `disclose` is false.
+
+```bash
+python -m shorts voices   # your account's voices; set voiceover.voices per platform, or leave
+                          # it empty and the run picks three different ones
+```
+
+Needs `ELEVENLABS_API_KEY` in `.env`. The default model is `eleven_v3`, ElevenLabs' most
+natural-sounding voice model at the time of writing. Narration currently needs a source with
+speech, because clips are chosen from the transcript; footage with no talking needs the model
+to see the frames, which is the next piece of work.
+
 ### Captions
 
 Burned-in lines are 3–6 words, broken on pauses and sentence ends. Every line is on screen for at
