@@ -534,6 +534,17 @@ def test_probe_reads_a_phone_video_the_way_it_is_shown():
     assert probe.audio_codecs == ["aac", "none"]
     assert probe.audio_tracks == 1  # the spatial track cannot be cut from
     assert probe.can_decode(0) and not probe.can_decode(1) and not probe.can_decode(5)
+    assert probe.hdr  # arib-std-b67 is HLG: phones shoot HDR by default
+
+    # an HDR source is tone-mapped to SDR before framing; an SDR one is left alone
+    clip = Clip("clip_1", 0, 2, [], {"mode": "center_crop"}, "preserve", "", "high")
+    hdr_cmd = render.build_command(clip, "i.mov", Path("a.ass"), Path("o.mp4"), 2160, 3840, hdr=True)
+    graph = hdr_cmd[hdr_cmd.index("-filter_complex") + 1]
+    assert "tonemap=tonemap=hable" in graph and "[vc]zscale=t=linear" in graph
+    assert "[vsdr]crop=" in graph  # framing reads the tone-mapped picture, not the raw one
+    sdr_cmd = render.build_command(clip, "i.mov", Path("a.ass"), Path("o.mp4"), 2160, 3840)
+    assert "tonemap" not in sdr_cmd[sdr_cmd.index("-filter_complex") + 1]
+    assert hdr_cmd[hdr_cmd.index("-color_trc") + 1] == "bt709"  # and it says what it is
 
 
 def test_load_words_accepts_whisper_dumps():

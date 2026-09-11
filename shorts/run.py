@@ -54,8 +54,14 @@ class Run:
 
         probe = media.probe(cfg.source_video)
         self.note(
-            "source %dx%d %.1fs, %d audio track(s)"
-            % (probe.width, probe.height, probe.duration, probe.audio_tracks)
+            "source %dx%d %.1fs, %d audio track(s)%s"
+            % (
+                probe.width,
+                probe.height,
+                probe.duration,
+                probe.audio_tracks,
+                ", HDR (tone-mapped to SDR)" if probe.hdr else "",
+            )
         )
         if probe.audio_tracks == 0:
             raise media.MediaError("%s has no audio track to cut from" % cfg.source_video)
@@ -177,7 +183,7 @@ class Run:
         for note in rendering.audio_notes(clip):
             self.flags.append(note)
 
-        clip.asset_ref = rendering.render(clip, cfg, probe.width, probe.height)
+        clip.asset_ref = rendering.render(clip, cfg, probe.width, probe.height, probe.hdr)
         self.note("%s rendered %.1fs -> %s" % (clip.clip_id, clip.duration, clip.asset_ref))
 
         return self._clip_row(clip, self._deliver(clip))

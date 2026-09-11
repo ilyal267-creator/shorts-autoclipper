@@ -28,6 +28,9 @@ class Probe:
     # Codec per audio stream, in ffmpeg's 0:a:N order. "none" means ffmpeg has no decoder
     # for it — an iPhone's spatial-audio "apac" track, for one.
     audio_codecs: list[str] = field(default_factory=lambda: ["aac"])
+    # HLG or PQ transfer: phones record this by default. Rendering it as plain 8-bit bt709
+    # without tone mapping is what makes phone footage look grey and washed out.
+    hdr: bool = False
 
     @property
     def audio_tracks(self) -> int:
@@ -44,6 +47,9 @@ class Probe:
     @property
     def is_vertical(self) -> bool:
         return self.aspect < 1.0
+
+
+HDR_TRANSFERS = ("arib-std-b67", "smpte2084")  # HLG, PQ
 
 
 def displayed(width: int, height: int, rotation: float) -> tuple[int, int]:
@@ -81,6 +87,7 @@ def _probe_ffprobe(video: str) -> Probe:
         audio_codecs=[
             s.get("codec_name") or "none" for s in streams if s.get("codec_type") == "audio"
         ],
+        hdr=stream.get("color_transfer") in HDR_TRANSFERS,
     )
 
 
@@ -93,6 +100,7 @@ def _probe_ffmpeg(video: str) -> Probe:
         raise MediaError("could not read %s: %s" % (video, text.strip()[-400:]))
     hours, minutes, seconds = clock.groups()
     turn = re.search(r"displaymatrix: rotation of (-?\d+(?:\.\d+)?) degrees", text)
+    video_line = re.search(r"Stream #\d+:\d+[^\n]*?: Video:[^\n]*", text)
     width, height = displayed(
         int(size.group(1)), int(size.group(2)), float(turn.group(1)) if turn else 0.0
     )
@@ -101,6 +109,7 @@ def _probe_ffmpeg(video: str) -> Probe:
         width=width,
         height=height,
         audio_codecs=re.findall(r"Stream #\d+:\d+[^\n]*?: Audio: (\w+)", text),
+        hdr=bool(video_line and any(t in video_line.group(0) for t in HDR_TRANSFERS)),
     )
 
 

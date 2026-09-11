@@ -117,14 +117,30 @@ def _crop_filter(reframe: dict, width: int, height: int) -> str:
     return "crop=%d:%d:(iw-%d)/2:(ih-%d)/2" % (crop_w, crop_h, crop_w, crop_h)
 
 
-def _frame_filter(reframe: dict, width: int, height: int, subtitles: str) -> list[str]:
+# HLG/PQ -> SDR bt709: to linear light, into bt709 primaries, compress the highlights with a
+# filmic curve, back to a bt709 transfer at 8 bits. Without it phone HDR renders flat and grey.
+TONEMAP = (
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
+    "tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+)
+
+
+def _frame_filter(
+    reframe: dict, width: int, height: int, subtitles: str, hdr: bool = False
+) -> list[str]:
     """[vc] -> [vout]: get the concatenated clip into a 1080x1920 frame, then burn captions."""
+    if hdr:
+        return ["[vc]%s[vsdr]" % TONEMAP] + _framed(reframe, width, height, subtitles, "[vsdr]")
+    return _framed(reframe, width, height, subtitles, "[vc]")
+
+
+def _framed(reframe: dict, width: int, height: int, subtitles: str, source: str) -> list[str]:
     if reframe.get("mode") == "fit":
         # The whole frame, full width, over a blurred and dimmed fill of itself. For screens,
         # slides and gameplay, where any 9:16 slice throws away most of what matters. The
         # fill is blurred small and scaled back up: same look, a fraction of the work.
         return [
-            "[vc]split=2[bg][fg]",
+            "%ssplit=2[bg][fg]" % source,
             "[bg]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,"
             "scale=%d:%d,boxblur=12:2,scale=%d:%d,eq=brightness=-0.12[fill]"
             % (OUT_W, OUT_H, OUT_W, OUT_H, OUT_W // 4, OUT_H // 4, OUT_W, OUT_H),
@@ -132,9 +148,9 @@ def _frame_filter(reframe: dict, width: int, height: int, subtitles: str) -> lis
             "[fill][front]overlay=(W-w)/2:(H-h)/2,setsar=1,subtitles='%s'[vout]" % subtitles,
         ]
     return [
-        "[vc]%s,scale=%d:%d:force_original_aspect_ratio=decrease,"
+        "%s%s,scale=%d:%d:force_original_aspect_ratio=decrease,"
         "pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles='%s'[vout]"
-        % (_crop_filter(reframe, width, height), OUT_W, OUT_H, OUT_W, OUT_H, subtitles)
+        % (source, _crop_filter(reframe, width, height), OUT_W, OUT_H, OUT_W, OUT_H, subtitles)
     ]
 
 
@@ -167,6 +183,7 @@ def build_command(
     width: int,
     height: int,
     audio_track: int = 0,
+    hdr: bool = False,
 ) -> list[str]:
     keeps = clip.keeps
     if not keeps:
@@ -181,20 +198,22 @@ def build_command(
         )
         labels.append("[v%d][a%d]" % (i, i))
     parts.append("%sconcat=n=%d:v=1:a=1[vc][aout]" % ("".join(labels), len(keeps)))
-    parts.extend(_frame_filter(clip.reframe, width, height, _escape_for_filter(ass_path)))
+    parts.extend(_frame_filter(clip.reframe, width, height, _escape_for_filter(ass_path), hdr))
 
     return [
         "ffmpeg", "-y", "-i", source,
         "-filter_complex", ";".join(parts),
         "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        # say what the pixels are, so players do not guess; every render comes out SDR bt709
+        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
         "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
         "-movflags", "+faststart",
         str(out_path),
     ]
 
 
-def render(clip: Clip, cfg: Config, width: int, height: int) -> str:
+def render(clip: Clip, cfg: Config, width: int, height: int, hdr: bool = False) -> str:
     """Render one clip and return its asset reference. Publishing waits on this returning."""
     media.require_ffmpeg()
     out_dir = Path(cfg.output_dir) / "assets"
@@ -205,6 +224,8 @@ def render(clip: Clip, cfg: Config, width: int, height: int) -> str:
 
     out_path = out_dir / ("%s.mp4" % clip.clip_id)
     media.run(
-        build_command(clip, cfg.source_video, ass_path, out_path, width, height, cfg.audio_track)
+        build_command(
+            clip, cfg.source_video, ass_path, out_path, width, height, cfg.audio_track, hdr
+        )
     )
     return str(out_path)
