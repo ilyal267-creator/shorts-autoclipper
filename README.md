@@ -17,18 +17,32 @@ as the model's system prompt — it is the source of truth, not a copy of one.
 | §4.6 render | ffmpeg — trim, concat around micro-cuts, 9:16 crop, burned .ass subtitles |
 | §4.7 publish | TikTok Content Posting API, Instagram Graph API, YouTube Data API v3 |
 
-Every boundary the model picks is snapped to a word edge, and every subtitle is re-timed onto
-the cut timeline (`shorts/clips.py`) — the model never gets to be off by a syllable.
+The model plans against a timeline built from word-level timings, with every cuttable silence
+named by its range. A boundary within half a second of a word edge is nudged onto it so a cut
+never clips a syllable; one placed deliberately in silence — holding on the action past the last
+word — is kept as set. Every subtitle is then re-timed onto the cut timeline (`shorts/clips.py`).
+
+### Captions
+
+Burned-in lines are 3–6 words, broken on pauses and sentence ends. Every line is on screen for at
+least half a second; a word left on its own rejoins the phrase it belongs to, following the
+punctuation; and no line ever spans a micro-cut, since the cut is what made those words
+neighbours. Emphasis words are highlighted once per line, by whole word.
 
 ## Setup
 
 ```bash
-pip install -e .
-cp .env.example .env      # fill in what you have; the CLI reads it, real env vars win
-python -m shorts doctor   # checks ffmpeg + credentials
+pip install -e '.[whisper]'   # drop [whisper] if you always supply your own transcript
+cp .env.example .env          # fill in what you have; the CLI reads it, real env vars win
+python -m shorts doctor       # ffmpeg, model provider, API reachability, platform tokens
 ```
 
-Requires **ffmpeg** on PATH (ffprobe optional) and Python 3.10+.
+Requires **ffmpeg** on PATH (ffprobe optional) and Python 3.10+. The first transcription downloads
+the whisper model; a GPU is used when its CUDA runtime is present, CPU otherwise.
+
+If `doctor` reports the API unreachable over TLS, something is intercepting HTTPS (a corporate
+proxy, some antivirus). Point `SSL_CERT_FILE` at the CA bundle it uses for the model calls, and
+`REQUESTS_CA_BUNDLE` for the publishers.
 
 ## Run
 
@@ -74,6 +88,12 @@ watch the output of a run instead of taking the assertions' word for it.
 
 ## Known limits
 
+- **Selection reads the transcript, not the picture.** On talk — lectures, podcasts, talking
+  heads — the hook and payoff are in the words and the model finds them well. On gameplay or
+  anything whose payoff is visual it can only infer from gaps in the speech, and says so in its
+  notes; expect fewer clips and lower confidence, and look before publishing.
+- **Captions are only as good as the transcript.** Line rules fix fragments; they cannot fix a
+  word whisper misheard, which is common on noisy voice comms. Draft mode exists for this.
 - **Active-speaker reframing falls back to a centre crop.** The plan accepts the mode; honouring
   it needs per-frame face tracking (`shorts/render.py`).
 - **`duck_under_speech` is a no-op** — one mixed audio track can't be separated into stems. The
