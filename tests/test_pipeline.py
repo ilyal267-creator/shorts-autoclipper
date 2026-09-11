@@ -462,6 +462,47 @@ def test_fit_keeps_the_whole_frame_and_the_config_can_force_it():
         pass
 
 
+def test_youtube_sign_in_uses_pkce_and_asks_for_a_refresh_token():
+    import base64
+    import hashlib
+    import os
+    import tempfile
+    import urllib.parse
+
+    from shorts import auth
+
+    verifier, challenge = auth.pkce_pair()
+    assert 43 <= len(verifier) <= 128  # RFC 7636 bounds
+    expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=")
+    assert challenge == expected.decode()  # S256 of the verifier, never the verifier itself
+    assert auth.pkce_pair()[0] != verifier  # fresh every sign-in
+
+    client = {"auth_uri": "https://accounts.google.com/o/oauth2/auth", "client_id": "cid"}
+    query = urllib.parse.parse_qs(
+        urllib.parse.urlparse(auth.consent_url(client, "http://127.0.0.1:9/", challenge, "st")).query
+    )
+    assert query["access_type"] == ["offline"] and query["prompt"] == ["consent"]
+    assert query["code_challenge_method"] == ["S256"] and query["code_challenge"] == [challenge]
+    assert query["scope"] == [auth.YOUTUBE_UPLOAD_SCOPE] and query["state"] == ["st"]
+    assert "client_secret" not in query  # the secret only ever goes to the token endpoint
+
+    # not signed in: a clear instruction, not a KeyError or a 401 from the upload
+    with tempfile.TemporaryDirectory() as tmp:
+        saved = {k: os.environ.pop(k, None) for k in ("YOUTUBE_ACCESS_TOKEN", "YOUTUBE_TOKEN_FILE")}
+        os.environ["YOUTUBE_TOKEN_FILE"] = os.path.join(tmp, "none.json")
+        auth._cached.clear()
+        try:
+            auth.youtube_access_token()
+            raise AssertionError("expected AuthError")
+        except auth.AuthError as exc:
+            assert "shorts auth youtube" in str(exc)
+        finally:
+            os.environ.pop("YOUTUBE_TOKEN_FILE", None)
+            for key, value in saved.items():
+                if value is not None:
+                    os.environ[key] = value
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

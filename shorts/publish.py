@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
+from . import auth
+
 GRAPH_VERSION = "v21.0"
 
 
@@ -159,7 +161,10 @@ def instagram_reels(asset: str, meta: dict, account_id: str) -> Result:
 
 def youtube_shorts(asset: str, meta: dict, account_id: str) -> Result:
     requests = _requests()
-    token = _env("YOUTUBE_ACCESS_TOKEN")
+    try:
+        token = auth.youtube_access_token()  # refreshed from the stored sign-in
+    except auth.AuthError as exc:
+        raise PublishError(str(exc)) from exc
     size = Path(asset).stat().st_size
     content_type = mimetypes.guess_type(asset)[0] or "video/mp4"
     description = "\n\n".join(

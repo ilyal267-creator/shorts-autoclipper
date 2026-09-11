@@ -113,6 +113,28 @@ def _api_reachable() -> str:
         return "unknown (neither httpx nor requests installed)"
 
 
+def cmd_auth(args) -> int:
+    from . import auth
+
+    try:
+        path = auth.authorize_youtube()
+    except auth.AuthError as exc:
+        print("sign-in failed: %s" % exc, file=sys.stderr)
+        return 1
+    print("Signed in to YouTube. Refresh token stored in %s (gitignored)." % path)
+    return 0
+
+
+def _youtube_status() -> str:
+    from . import auth
+
+    if os.getenv("YOUTUBE_ACCESS_TOKEN"):
+        return "access token from env"
+    if auth.token_path().exists():
+        return "signed in (%s)" % auth.token_path()
+    return "not signed in — python -m shorts auth youtube"
+
+
 def cmd_doctor(args) -> int:
     rows = [
         ("ffmpeg", bool(shutil.which("ffmpeg"))),
@@ -121,7 +143,7 @@ def cmd_doctor(args) -> int:
         ("api.anthropic.com", _api_reachable()),
         ("TIKTOK_ACCESS_TOKEN", bool(os.getenv("TIKTOK_ACCESS_TOKEN"))),
         ("IG_ACCESS_TOKEN", bool(os.getenv("IG_ACCESS_TOKEN"))),
-        ("YOUTUBE_ACCESS_TOKEN", bool(os.getenv("YOUTUBE_ACCESS_TOKEN"))),
+        ("YouTube sign-in", _youtube_status()),
     ]
     for name, value in rows:
         print("%-22s %s" % (name, value))
@@ -162,6 +184,10 @@ def main(argv=None) -> int:
         sp.add_argument("--mode", choices=["auto_publish", "schedule", "draft_for_approval"])
         sp.add_argument("--out", help="override output_dir")
         sp.set_defaults(handler=handler)
+
+    sp = sub.add_parser("auth", help="sign in to a platform once, in the browser")
+    sp.add_argument("platform", choices=["youtube"])
+    sp.set_defaults(handler=cmd_auth)
 
     sp = sub.add_parser("doctor", help="check tooling and credentials")
     sp.set_defaults(handler=cmd_doctor)
