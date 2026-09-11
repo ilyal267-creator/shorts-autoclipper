@@ -438,6 +438,30 @@ def test_load_env_does_not_shadow_real_variables():
     assert load_env(Path(tmp) / "gone.env") == []
 
 
+def test_fit_keeps_the_whole_frame_and_the_config_can_force_it():
+    clip = Clip("clip_1", 0, 10, [], {"mode": "fit"}, "preserve", "", "high")
+    cmd = render.build_command(clip, "in.mp4", Path("a.ass"), Path("o.mp4"), 1280, 720)
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "split=2[bg][fg]" in graph  # one copy for the fill, one for the picture
+    assert "boxblur" in graph and "overlay=(W-w)/2:(H-h)/2" in graph
+    assert "[fg]scale=1080:-2" in graph  # full width, height follows the source
+    assert "crop=405:720" not in graph  # nothing sliced off the sides
+    assert graph.count("subtitles=") == 1 and graph.endswith("[vout]")
+
+    # crop modes are untouched by the change
+    cropped = Clip("clip_1", 0, 10, [], {"mode": "center_crop"}, "preserve", "", "high")
+    crop_cmd = render.build_command(cropped, "in.mp4", Path("a.ass"), Path("o.mp4"), 1280, 720)
+    assert "crop=405:720" in crop_cmd[crop_cmd.index("-filter_complex") + 1]
+
+    # whoever set up the run can see the picture; the override wins and bad values are refused
+    assert config_mod.from_dict({**BASE_CONFIG, "reframe_mode": "fit"}).reframe_mode == "fit"
+    try:
+        config_mod.from_dict({**BASE_CONFIG, "reframe_mode": "letterbox"})
+        raise AssertionError("expected ConfigError")
+    except config_mod.ConfigError:
+        pass
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

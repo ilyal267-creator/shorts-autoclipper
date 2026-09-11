@@ -39,6 +39,7 @@
   },
 
   "audio_track": 0,
+  "reframe_mode": null,
 
   "rights_confirmed": false,
   "third_party_music": false,

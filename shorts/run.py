@@ -81,6 +81,8 @@ class Run:
         self.excluded.extend(plan.get("excluded_segments", []))
 
         clips = self._build_clips(plan, transcript)
+        if cfg.reframe_mode:
+            self.note("reframe_mode=%s from the config overrides the plan" % cfg.reframe_mode)
         if len(clips) < cfg.clip_count:
             self.flags.append(
                 "returned %d of %d requested clips — the rest did not clear the quality bar"
@@ -119,7 +121,11 @@ class Run:
                 start=agent.snap(float(raw["start"]), transcript, "start"),
                 end=agent.snap(float(raw["end"]), transcript, "end"),
                 cuts=[(float(c["start"]), float(c["end"])) for c in raw.get("cuts", [])],
-                reframe=raw.get("reframe") or {"mode": "center_crop"},
+                reframe=(
+                    {"mode": cfg.reframe_mode}
+                    if cfg.reframe_mode
+                    else raw.get("reframe") or {"mode": "center_crop"}
+                ),
                 audio=raw.get("audio", "preserve"),
                 selection_reason=raw.get("selection_reason", ""),
                 confidence=raw.get("confidence", "low"),

@@ -22,6 +22,14 @@ named by its range. A boundary within half a second of a word edge is nudged ont
 never clips a syllable; one placed deliberately in silence — holding on the action past the last
 word — is kept as set. Every subtitle is then re-timed onto the cut timeline (`shorts/clips.py`).
 
+### Framing
+
+The planner picks a crop per clip, and can choose `fit` — the whole 16:9 frame at full width
+over a blurred fill of itself, with captions on the fill below the picture. That is the right
+call for screen recordings, slides and gameplay, where any 9:16 slice throws away most of the
+frame. Since the planner reads the transcript and never sees the picture, `reframe_mode` in the
+config forces one framing on every clip; set it to `fit` for that kind of source.
+
 ### Captions
 
 Burned-in lines are 3–6 words, broken on pauses and sentence ends. Every line is on screen for at

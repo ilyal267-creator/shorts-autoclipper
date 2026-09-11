@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts")
+REFRAME_MODES = ("center_crop", "fixed_crop", "active_speaker", "fit")
 
 DEFAULT_SUBTITLE_STYLE = {
     "font": "Arial Black",
@@ -51,6 +52,9 @@ class Config:
     third_party_music: bool = False
     # Which audio stream to cut from: game capture, mic and desktop are often separate tracks.
     audio_track: int = 0
+    # Forces one framing on every clip. The model plans from the transcript and cannot see the
+    # picture; whoever set up the run can, and knows a screen recording when they have one.
+    reframe_mode: str | None = None
     # Instagram's Graph API pulls the asset over HTTP, so it needs a public URL.
     public_asset_base_url: str | None = None
     output_dir: str = "out"
@@ -105,6 +109,8 @@ def from_dict(raw: dict) -> Config:
     )
     if mode not in ("auto_publish", "schedule", "draft_for_approval"):
         raise ConfigError(f"unknown posting_mode {mode!r}")
+    if raw.get("reframe_mode") and raw["reframe_mode"] not in REFRAME_MODES:
+        raise ConfigError(f"unknown reframe_mode {raw['reframe_mode']!r}; expected one of {REFRAME_MODES}")
 
     cfg = Config(
         source_video=raw["source_video"],
@@ -124,6 +130,7 @@ def from_dict(raw: dict) -> Config:
         rights_confirmed=bool(raw.get("rights_confirmed", False)),
         third_party_music=bool(raw.get("third_party_music", False)),
         audio_track=int(raw.get("audio_track", 0)),
+        reframe_mode=raw.get("reframe_mode") or None,
         public_asset_base_url=raw.get("public_asset_base_url") or os.getenv("PUBLIC_ASSET_BASE_URL"),
         output_dir=raw.get("output_dir") or "out",
     )

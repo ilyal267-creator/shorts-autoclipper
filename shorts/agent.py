@@ -1,6 +1,6 @@
 """The model-facing half: segment selection (§4.2/4.3), copywriting (§4.4), safety (§4.5).
 
-The spec in docs/agent-system-prompt.md *is* the system prompt — single source of truth.
+The spec in shorts/system-prompt.md *is* the system prompt — single source of truth.
 Every call comes back through a strict JSON schema, so a malformed plan fails loudly here
 rather than three stages later at the publish call.
 """
@@ -12,7 +12,7 @@ import json
 import os
 from pathlib import Path
 
-from .config import PLATFORMS, Config
+from .config import PLATFORMS, REFRAME_MODES, Config
 from .transcribe import Transcript
 
 MODEL = "claude-opus-5"
@@ -20,7 +20,6 @@ MODEL = "claude-opus-5"
 SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent / "system-prompt.md"
 
 CONFIDENCE = ["low", "medium", "high"]
-REFRAME_MODES = ["center_crop", "fixed_crop", "active_speaker"]
 AUDIO_MODES = ["preserve", "duck_under_speech", "trim_silence"]
 
 
@@ -182,7 +181,7 @@ CLIP_SCHEMA = {
                         "additionalProperties": False,
                         "required": ["mode"],
                         "properties": {
-                            "mode": {"type": "string", "enum": REFRAME_MODES},
+                            "mode": {"type": "string", "enum": list(REFRAME_MODES)},
                             "x": {"type": "number"},
                             "y": {"type": "number"},
                             "w": {"type": "number"},
@@ -232,6 +231,9 @@ def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int) -> 
         "micro-cuts in `cuts`, and trust the boundaries to a tenth of a second. A boundary is "
         "moved onto a nearby word edge only when one sits within half a second, so an in- or "
         "out-point you place in silence to hold on the action is kept as you set it.\n\n"
+        "Reframe: `fit` keeps the whole frame at full width over a blurred fill of itself. "
+        "Prefer it for screen recordings, slides and gameplay, where any 9:16 slice loses most "
+        "of the picture; crop when a single speaker fills the frame.\n\n"
         "Transcript:\n" + timeline(transcript)
     )
     return _call(CLIP_SCHEMA, prompt)

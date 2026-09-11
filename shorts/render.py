@@ -117,6 +117,27 @@ def _crop_filter(reframe: dict, width: int, height: int) -> str:
     return "crop=%d:%d:(iw-%d)/2:(ih-%d)/2" % (crop_w, crop_h, crop_w, crop_h)
 
 
+def _frame_filter(reframe: dict, width: int, height: int, subtitles: str) -> list[str]:
+    """[vc] -> [vout]: get the concatenated clip into a 1080x1920 frame, then burn captions."""
+    if reframe.get("mode") == "fit":
+        # The whole frame, full width, over a blurred and dimmed fill of itself. For screens,
+        # slides and gameplay, where any 9:16 slice throws away most of what matters. The
+        # fill is blurred small and scaled back up: same look, a fraction of the work.
+        return [
+            "[vc]split=2[bg][fg]",
+            "[bg]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,"
+            "scale=%d:%d,boxblur=12:2,scale=%d:%d,eq=brightness=-0.12[fill]"
+            % (OUT_W, OUT_H, OUT_W, OUT_H, OUT_W // 4, OUT_H // 4, OUT_W, OUT_H),
+            "[fg]scale=%d:-2[front]" % OUT_W,
+            "[fill][front]overlay=(W-w)/2:(H-h)/2,setsar=1,subtitles='%s'[vout]" % subtitles,
+        ]
+    return [
+        "[vc]%s,scale=%d:%d:force_original_aspect_ratio=decrease,"
+        "pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles='%s'[vout]"
+        % (_crop_filter(reframe, width, height), OUT_W, OUT_H, OUT_W, OUT_H, subtitles)
+    ]
+
+
 def _escape_for_filter(path: Path) -> str:
     """ffmpeg filter args need the drive colon and backslashes escaped."""
     text = str(path.resolve()).replace("\\", "/")
@@ -160,18 +181,7 @@ def build_command(
         )
         labels.append("[v%d][a%d]" % (i, i))
     parts.append("%sconcat=n=%d:v=1:a=1[vc][aout]" % ("".join(labels), len(keeps)))
-    parts.append(
-        "[vc]%s,scale=%d:%d:force_original_aspect_ratio=decrease,"
-        "pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles='%s'[vout]"
-        % (
-            _crop_filter(clip.reframe, width, height),
-            OUT_W,
-            OUT_H,
-            OUT_W,
-            OUT_H,
-            _escape_for_filter(ass_path),
-        )
-    )
+    parts.extend(_frame_filter(clip.reframe, width, height, _escape_for_filter(ass_path)))
 
     return [
         "ffmpeg", "-y", "-i", source,
