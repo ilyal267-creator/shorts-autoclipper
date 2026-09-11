@@ -66,7 +66,9 @@ def consent_url(client: dict, redirect_uri: str, challenge: str, state: str) -> 
             "response_type": "code",
             "scope": YOUTUBE_UPLOAD_SCOPE,
             "access_type": "offline",  # ask for a refresh token
-            "prompt": "consent",  # ...and get one even if this account consented before
+            # Always show the account chooser (the browser may already hold another Google
+            # account) and always re-consent, so a refresh token comes back every time.
+            "prompt": "select_account consent",
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "state": state,

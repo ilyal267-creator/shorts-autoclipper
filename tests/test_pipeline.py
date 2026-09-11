@@ -481,7 +481,7 @@ def test_youtube_sign_in_uses_pkce_and_asks_for_a_refresh_token():
     query = urllib.parse.parse_qs(
         urllib.parse.urlparse(auth.consent_url(client, "http://127.0.0.1:9/", challenge, "st")).query
     )
-    assert query["access_type"] == ["offline"] and query["prompt"] == ["consent"]
+    assert query["access_type"] == ["offline"] and query["prompt"] == ["select_account consent"]
     assert query["code_challenge_method"] == ["S256"] and query["code_challenge"] == [challenge]
     assert query["scope"] == [auth.YOUTUBE_UPLOAD_SCOPE] and query["state"] == ["st"]
     assert "client_secret" not in query  # the secret only ever goes to the token endpoint
