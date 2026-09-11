@@ -14,7 +14,7 @@ as the model's system prompt — it is the source of truth, not a copy of one.
 | §4.2/4.3 segment selection + edit plan | `claude-opus-5`, one strict-schema call |
 | §4.4 hook / captions / copy / hashtags | `claude-opus-5`, one call per clip, all three platforms in one schema |
 | §4.5 compliance | model verdict **plus** a deterministic banned-word / disclaimer / rights check |
-| §4.6 render | ffmpeg — trim, concat around micro-cuts, 9:16 crop, burned .ass subtitles |
+| §4.6 render | ffmpeg — trim, concat around micro-cuts, 9:16 crop or `fit`, burned .ass subtitles |
 | §4.7 publish | TikTok Content Posting API, Instagram Graph API, YouTube Data API v3 |
 
 The model plans against a timeline built from word-level timings, with every cuttable silence
