@@ -48,6 +48,20 @@ python -m shorts doctor       # ffmpeg, model provider, API reachability, platfo
 Requires **ffmpeg** on PATH (ffprobe optional) and Python 3.10+. The first transcription downloads
 the whisper model; a GPU is used when its CUDA runtime is present, CPU otherwise.
 
+### Publishing to YouTube
+
+Create a Google Cloud project with the **YouTube Data API v3** enabled, an OAuth consent screen
+carrying the `youtube.upload` scope, and a **Desktop app** OAuth client. Save its JSON as
+`.secrets/youtube_client.json` (gitignored), then sign in once:
+
+```bash
+python -m shorts auth youtube   # browser opens; pick the account that owns the channel
+```
+
+The refresh token lands in `.secrets/youtube_token.json` and every later run mints its own access
+token from it. While the consent screen is in *Testing*, only listed test users can sign in and the
+token lapses after 7 days; publishing the app removes both limits.
+
 If `doctor` reports the API unreachable over TLS, something is intercepting HTTPS (a corporate
 proxy, some antivirus). Point `SSL_CERT_FILE` at the CA bundle it uses for the model calls, and
 `REQUESTS_CA_BUNDLE` for the publishers.
@@ -106,8 +120,9 @@ watch the output of a run instead of taking the assertions' word for it.
   it needs per-frame face tracking (`shorts/render.py`).
 - **`duck_under_speech` is a no-op** — one mixed audio track can't be separated into stems. The
   run flags it rather than pretending.
-- **YouTube takes a bare OAuth access token.** No refresh-token dance; wire your own token source
-  in front of `YOUTUBE_ACCESS_TOKEN` for unattended runs.
+- **YouTube uploads are private until your Cloud project passes Google's YouTube API audit.**
+  Sign-in, refresh and upload all work (verified with a live private upload); public posting
+  needs the audit, and the default quota covers roughly six uploads a day.
 - **Instagram needs a public URL** for the rendered file (`public_asset_base_url`) — the Graph API
   pulls the video rather than accepting an upload.
 - **Silent or non-speech audio invents words.** Whisper will produce "You You You" from a
