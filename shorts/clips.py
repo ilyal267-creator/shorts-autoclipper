@@ -37,6 +37,8 @@ class Clip:
     subtitles: list[Line] = field(default_factory=list)
     asset_ref: str | None = None
     excluded_reason: str | None = None
+    # With narration each platform gets its own render (own voice, own captions).
+    assets: dict = field(default_factory=dict)
 
     @property
     def keeps(self) -> list[tuple[float, float]]:

@@ -271,12 +271,21 @@ def _mock_clips(cfg: Config, transcript: Transcript) -> dict:
 # --------------------------------------------------------------------------- §4.4
 
 
-def _copy_schema() -> dict:
+def _copy_schema(narrated: bool = False) -> dict:
+    required = ["hook", "title", "caption", "hashtags", "emphasis_words"]
+    extra = {}
+    if narrated:
+        required.append("voiceover")
+        extra["voiceover"] = {
+            "type": "string",
+            "description": "the narration this platform's voice reads over the clip",
+        }
     platform_obj = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["hook", "title", "caption", "hashtags", "emphasis_words"],
+        "required": required,
         "properties": {
+            **extra,
             "hook": {"type": "string", "description": "3-8 words, first on-screen text"},
             "title": {
                 "type": "string",
@@ -299,10 +308,29 @@ def _copy_schema() -> dict:
     }
 
 
-def write_copy(cfg: Config, clip_text: str, clip_index: int, sibling_hooks: list[str]) -> dict:
+def write_copy(
+    cfg: Config,
+    clip_text: str,
+    clip_index: int,
+    sibling_hooks: list[str],
+    duration: float = 0.0,
+) -> dict:
     if provider() == "mock":
-        return _mock_copy(cfg, clip_text, clip_index)
+        return _mock_copy(cfg, clip_text, clip_index, duration)
     used = ", ".join(sibling_hooks) or "(none yet)"
+    narration = ""
+    if cfg.narrated:
+        from .voice import word_budget
+
+        narration = (
+            "Voiceover: each platform also gets `voiceover`, a narration read aloud by a "
+            "different realistic voice per platform over this %.1fs clip, with the original "
+            "audio ducked underneath. Hard limit %d words so it ends before the clip does. "
+            "Write it to be spoken: plain sentences, no hashtags, emoji, stage directions or "
+            "brackets. Don't transcribe the clip — narrate it: set up the hook, give the context "
+            "the footage can't, land the payoff. Each platform's narration is its own script, "
+            "not a rewording of another's.\n\n" % (duration, word_budget(duration))
+        )
     prompt = (
         f"Stage 4.4 for clip {clip_index + 1}.\n\n"
         f"Brand voice: {cfg.brand_voice}\n"
@@ -315,12 +343,14 @@ def write_copy(cfg: Config, clip_text: str, clip_index: int, sibling_hooks: list
         "Write an independent set per platform — TikTok, Instagram Reels, YouTube Shorts. No "
         "shared strings between them: different hook, different caption, different hashtags. "
         "Vary the CTA. Only YouTube Shorts gets a title; leave the others' title empty.\n\n"
-        "Clip transcript:\n" + clip_text
+        + narration
+        + "Clip transcript:\n"
+        + (clip_text or "(no speech in this clip)")
     )
-    return _call(_copy_schema(), prompt)
+    return _call(_copy_schema(cfg.narrated), prompt)
 
 
-def _mock_copy(cfg: Config, clip_text: str, clip_index: int) -> dict:
+def _mock_copy(cfg: Config, clip_text: str, clip_index: int, duration: float = 0.0) -> dict:
     seed = hashlib.sha1(clip_text.encode("utf-8")).hexdigest()[:6]
     words = clip_text.split()
     gist = " ".join(words[:6]) or "clip"
@@ -335,6 +365,11 @@ def _mock_copy(cfg: Config, clip_text: str, clip_index: int) -> dict:
             "hashtags": ["#" + t.strip("#") for t in tags] + ["#%s%s" % (platform.split("_")[0], seed)],
             "emphasis_words": words[n : n + 1],
         }
+        if cfg.narrated:
+            out[platform]["voiceover"] = "Mock narration for %s, clip %d. No model wrote this." % (
+                platform.replace("_", " "),
+                clip_index + 1,
+            )
     return out
 
 

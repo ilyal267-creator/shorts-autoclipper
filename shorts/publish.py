@@ -189,6 +189,8 @@ def youtube_shorts(asset: str, meta: dict, account_id: str) -> Result:
             "status": {
                 "privacyStatus": os.getenv("YOUTUBE_PRIVACY_STATUS", "private"),
                 "selfDeclaredMadeForKids": False,
+                # YouTube's altered-or-synthetic disclosure: set when an AI voice narrates.
+                **({"containsSyntheticMedia": True} if meta.get("synthetic_media") else {}),
             },
         },
         timeout=60,

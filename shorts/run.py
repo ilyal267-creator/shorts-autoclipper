@@ -35,6 +35,8 @@ class Run:
         self.out_dir = Path(cfg.output_dir)
         self.queue = Queue(self.out_dir / "queue.json")
         self.posted: set[tuple[str, str, str]] = set()
+        self.voices: dict[str, str] = {}  # platform -> ElevenLabs voice id, chosen once per run
+        self.transcript = None
 
     def note(self, message: str) -> None:
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
@@ -80,6 +82,7 @@ class Run:
             )
 
         transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language, cfg.audio_track)
+        self.transcript = transcript
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))
 
         plan = agent.plan_clips(cfg, transcript, probe.width, probe.height)
@@ -159,7 +162,9 @@ class Run:
         sibling_hooks = [
             s.copy.get("tiktok", {}).get("hook", "") for s in siblings if s.copy and s is not clip
         ]
-        clip.copy = agent.write_copy(cfg, clip_text, index, [h for h in sibling_hooks if h])
+        clip.copy = agent.write_copy(
+            cfg, clip_text, index, [h for h in sibling_hooks if h], clip.duration
+        )
         for problem in duplicate_copy(clip.copy):
             self.flags.append("%s: %s — rewrite before publishing" % (clip.clip_id, problem))
         for platform in {a["platform"] for a in cfg.connected_accounts}:
@@ -183,10 +188,67 @@ class Run:
         for note in rendering.audio_notes(clip):
             self.flags.append(note)
 
-        clip.asset_ref = rendering.render(clip, cfg, probe.width, probe.height, probe.hdr)
-        self.note("%s rendered %.1fs -> %s" % (clip.clip_id, clip.duration, clip.asset_ref))
+        if cfg.narrated:
+            self._narrate(clip, probe)
+        else:
+            clip.asset_ref = rendering.render(clip, cfg, probe.width, probe.height, probe.hdr)
+            self.note("%s rendered %.1fs -> %s" % (clip.clip_id, clip.duration, clip.asset_ref))
 
         return self._clip_row(clip, self._deliver(clip))
+
+    def _narrate(self, clip: Clip, probe) -> None:
+        """One render per platform: its own voice reading its own script, captioned to match."""
+        from . import voice
+
+        cfg = self.cfg
+        platforms = sorted({a["platform"] for a in cfg.connected_accounts})
+        if not self.voices:
+            self.voices = voice.pick_voices(platforms, cfg.voiceover.get("voices") or {})
+            self.note("voices: %s" % ", ".join("%s=%s" % kv for kv in sorted(self.voices.items())))
+        model = cfg.voiceover.get("model") or voice.DEFAULT_MODEL
+        assets_dir = self.out_dir / "assets"
+        # How loud the clip's own sound sits under the narration. Music and ambience belong in
+        # the mix; another person talking does not — at -18dB a speaker is still intelligible
+        # in every pause, and two voices at once reads as a mistake. Set it to override.
+        spoke = bool(transcript_words(clip, self.transcript))
+        bed_db = cfg.voiceover.get("original_audio_db")
+        if bed_db is None:
+            bed_db = -32.0 if spoke else -14.0
+        self.note(
+            "%s: original audio %.0fdB under the narration (%s)"
+            % (clip.clip_id, bed_db, "speech in the clip" if spoke else "no speech — music/ambience kept")
+        )
+
+        for platform in platforms:
+            script = (clip.copy.get(platform) or {}).get("voiceover", "").strip()
+            if not script:
+                self.flags.append("%s: no narration written for %s" % (clip.clip_id, platform))
+                continue
+            narration = assets_dir / ("%s_%s_voice.mp3" % (clip.clip_id, platform))
+            words = voice.synthesize(script, self.voices[platform], narration, model)
+            spoken = words[-1].end if words else 0.0
+            if spoken > clip.duration + 0.3:
+                self.flags.append(
+                    "%s: %s narration runs %.1fs against a %.1fs clip — the end is cut off"
+                    % (clip.clip_id, platform, spoken, clip.duration)
+                )
+            emphasis = (clip.copy.get(platform) or {}).get("emphasis_words", [])
+            captions = subtitle_lines(words, emphasis, clip_end=clip.duration)
+            clip.assets[platform] = rendering.render(
+                clip,
+                cfg,
+                probe.width,
+                probe.height,
+                probe.hdr,
+                variant=platform,
+                subtitles=captions,
+                voiceover=narration,
+                bed_db=float(bed_db),
+            )
+            self.note(
+                "%s rendered for %s: %.1fs of narration over %.1fs"
+                % (clip.clip_id, platform, spoken, clip.duration)
+            )
 
     def _deliver(self, clip: Clip) -> dict:
         cfg = self.cfg
@@ -202,9 +264,15 @@ class Run:
 
             meta = dict(clip.copy.get(platform, {}))
             meta["public_asset_base_url"] = cfg.public_asset_base_url
+            # A realistic synthetic voice is declared, not left for the platform to discover.
+            meta["synthetic_media"] = cfg.narrated and bool(cfg.voiceover.get("disclose", True))
+            asset = clip.assets.get(platform) or clip.asset_ref
+            if not asset:
+                out[platform] = {"status": "failed", "error": "no render for this platform"}
+                continue
 
             if cfg.posting_mode == "draft_for_approval":
-                out[platform] = {"status": "draft", **_text_fields(meta)}
+                out[platform] = {"status": "draft", "asset_ref": asset, **_text_fields(meta)}
                 continue
 
             if cfg.posting_mode == "schedule":
@@ -217,20 +285,22 @@ class Run:
                 if not when:
                     out[platform] = {"status": "failed", "error": "no free slot in the next 30 days"}
                     continue
-                queued_id = self.queue.add(platform, account_id, clip.asset_ref, meta, when[0])
+                queued_id = self.queue.add(platform, account_id, asset, meta, when[0])
                 out[platform] = {
                     "status": "scheduled",
                     "scheduled_for": when[0].isoformat(),
                     "queued_id": queued_id,
+                    "asset_ref": asset,
                     **_text_fields(meta),
                 }
                 continue
 
-            result = publishing.publish(platform, account_id, clip.asset_ref, meta, dry_run=dry_run)
+            result = publishing.publish(platform, account_id, asset, meta, dry_run=dry_run)
             out[platform] = {
                 "status": result.status,
                 "post_id": result.post_id,
                 "error": result.error,
+                "asset_ref": asset,
                 **_text_fields(meta),
             }
             if result.status == "failed":
@@ -264,11 +334,19 @@ class Run:
         }
 
 
+def transcript_words(clip: Clip, transcript) -> list:
+    """What was actually said inside this clip, after its cuts."""
+    if transcript is None:
+        return []
+    return retime(transcript.words_between(clip.start, clip.end), clip.keeps)
+
+
 def _text_fields(meta: dict) -> dict:
     return {
         "title": meta.get("title") or None,
         "caption": meta.get("caption"),
         "hashtags": meta.get("hashtags", []),
+        **({"voiceover": meta["voiceover"]} if meta.get("voiceover") else {}),
     }
 
 

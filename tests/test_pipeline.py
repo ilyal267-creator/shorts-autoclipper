@@ -559,6 +559,52 @@ def test_probe_reads_a_phone_video_the_way_it_is_shown():
     assert hdr_cmd[hdr_cmd.index("-color_trc") + 1] == "bt709"  # and it says what it is
 
 
+def test_narration_is_timed_budgeted_and_mixed_over_the_clip():
+    from shorts import agent, voice
+
+    # ElevenLabs' per-character timings become per-word timings for the captions
+    text = "Hook here. Payoff"
+    starts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6]
+    words = voice.words_from_alignment({
+        "characters": list(text),
+        "character_start_times_seconds": starts,
+        "character_end_times_seconds": [s + 0.1 for s in starts],
+    })
+    assert [(w.text, w.start, round(w.end, 2)) for w in words] == [
+        ("Hook", 0.0, 0.4), ("here.", 0.5, 1.0), ("Payoff", 1.1, 1.7)
+    ]
+    assert voice.words_from_alignment({}) == []  # no alignment: the caller falls back to whisper
+
+    # whisper decides *when*, the script decides *what*: a mis-heard word never reaches the screen
+    heard = [Word("Уелкам", 0.0, 0.5), Word("ту", 0.6, 0.8)]
+    assert [(w.text, w.start) for w in voice.script_timed("Welcome to", heard)] == [
+        ("Welcome", 0.0), ("to", 0.6)
+    ]
+    spread = voice.script_timed("one two three four", [Word("x", 1.0, 1.5), Word("y", 3.0, 5.0)])
+    assert [w.text for w in spread] == ["one", "two", "three", "four"]
+    assert spread[0].start == 1.0 and spread[-1].end <= 5.0  # inside the span actually spoken
+    assert all(a.end <= b.start for a, b in zip(spread, spread[1:]))  # in order, no overlap
+
+    # the script has to end before the clip does
+    assert voice.word_budget(10.0) == 24 and voice.word_budget(0.5) == 4
+
+    # narration only asked for when it is on
+    assert "voiceover" in agent._copy_schema(True)["properties"]["tiktok"]["required"]
+    assert "voiceover" not in agent._copy_schema(False)["properties"]["tiktok"]["required"]
+
+    # the render takes the narration as a second input and ducks the clip's own sound under it
+    clip = Clip("clip_1", 0, 10, [(4, 5)], {"mode": "center_crop"}, "preserve", "", "high")
+    cmd = render.build_command(
+        clip, "in.mp4", Path("a.ass"), Path("o.mp4"), 1920, 1080, voiceover=Path("vo.mp3")
+    )
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert cmd.count("-i") == 2 and "vo.mp3" in cmd
+    assert "[aorig]volume=-18.0dB[bed]" in graph and "[1:a:0]aresample=48000,apad[vo]" in graph
+    assert "[bed][vo]amix=inputs=2:duration=first:normalize=0[aout]" in graph
+    plain = render.build_command(clip, "in.mp4", Path("a.ass"), Path("o.mp4"), 1920, 1080)
+    assert plain.count("-i") == 1 and "amix" not in plain[plain.index("-filter_complex") + 1]
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

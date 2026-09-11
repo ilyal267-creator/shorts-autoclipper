@@ -40,6 +40,12 @@
 
   "audio_track": 0,
   "reframe_mode": null,
+  "voiceover": {
+    "enabled": false,
+    "model": "eleven_v3",
+    "voices": {},
+    "disclose": true
+  },
 
   "rights_confirmed": false,
   "third_party_music": false,

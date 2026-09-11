@@ -55,6 +55,10 @@ class Config:
     # Forces one framing on every clip. The model plans from the transcript and cannot see the
     # picture; whoever set up the run can, and knows a screen recording when they have one.
     reframe_mode: str | None = None
+    # Narration written per clip and read by an ElevenLabs voice, one voice per platform:
+    # {"enabled": true, "voices": {"tiktok": "<voice_id>", ...}, "model": "eleven_v3",
+    #  "original_audio_db": -18, "disclose": true}. Missing voices are picked from the account.
+    voiceover: dict = field(default_factory=dict)
     # Instagram's Graph API pulls the asset over HTTP, so it needs a public URL.
     public_asset_base_url: str | None = None
     output_dir: str = "out"
@@ -71,6 +75,10 @@ class Config:
     @property
     def required_disclaimers(self) -> list[str]:
         return list(self.content_policy.get("required_disclaimers", []))
+
+    @property
+    def narrated(self) -> bool:
+        return bool(self.voiceover.get("enabled"))
 
 
 def load(path: str | Path) -> Config:
@@ -131,6 +139,7 @@ def from_dict(raw: dict) -> Config:
         third_party_music=bool(raw.get("third_party_music", False)),
         audio_track=int(raw.get("audio_track", 0)),
         reframe_mode=raw.get("reframe_mode") or None,
+        voiceover=raw.get("voiceover") or {},
         public_asset_base_url=raw.get("public_asset_base_url") or os.getenv("PUBLIC_ASSET_BASE_URL"),
         output_dir=raw.get("output_dir") or "out",
     )

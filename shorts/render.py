@@ -184,6 +184,8 @@ def build_command(
     height: int,
     audio_track: int = 0,
     hdr: bool = False,
+    voiceover: Path | None = None,
+    bed_db: float = -18.0,
 ) -> list[str]:
     keeps = clip.keeps
     if not keeps:
@@ -197,11 +199,20 @@ def build_command(
             "[0:a:%d]atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS[a%d]" % (audio_track, start, end, i)
         )
         labels.append("[v%d][a%d]" % (i, i))
-    parts.append("%sconcat=n=%d:v=1:a=1[vc][aout]" % ("".join(labels), len(keeps)))
+    if voiceover is None:
+        parts.append("%sconcat=n=%d:v=1:a=1[vc][aout]" % ("".join(labels), len(keeps)))
+    else:
+        # The clip's own sound drops to a bed under the narration: music and room tone stay,
+        # the voice leads. amix runs for the clip's length, so narration can never extend it.
+        parts.append("%sconcat=n=%d:v=1:a=1[vc][aorig]" % ("".join(labels), len(keeps)))
+        parts.append("[aorig]volume=%.1fdB[bed]" % bed_db)
+        parts.append("[1:a:0]aresample=48000,apad[vo]")
+        parts.append("[bed][vo]amix=inputs=2:duration=first:normalize=0[aout]")
     parts.extend(_frame_filter(clip.reframe, width, height, _escape_for_filter(ass_path), hdr))
 
+    inputs = ["-i", source] + (["-i", str(voiceover)] if voiceover is not None else [])
     return [
-        "ffmpeg", "-y", "-i", source,
+        "ffmpeg", "-y", *inputs,
         "-filter_complex", ";".join(parts),
         "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
@@ -213,19 +224,44 @@ def build_command(
     ]
 
 
-def render(clip: Clip, cfg: Config, width: int, height: int, hdr: bool = False) -> str:
-    """Render one clip and return its asset reference. Publishing waits on this returning."""
+def render(
+    clip: Clip,
+    cfg: Config,
+    width: int,
+    height: int,
+    hdr: bool = False,
+    variant: str = "",
+    subtitles: list[Line] | None = None,
+    voiceover: Path | None = None,
+    bed_db: float | None = None,
+) -> str:
+    """Render one clip and return its asset reference. Publishing waits on this returning.
+
+    `variant` names a per-platform version (its own narration and captions); without it the
+    clip renders once, with its original sound, for every platform.
+    """
     media.require_ffmpeg()
     out_dir = Path(cfg.output_dir) / "assets"
     out_dir.mkdir(parents=True, exist_ok=True)
+    name = clip.clip_id + ("_" + variant if variant else "")
 
-    ass_path = out_dir / ("%s.ass" % clip.clip_id)
-    ass_path.write_text(build_ass(clip.subtitles, cfg.subtitle_style), encoding="utf-8")
+    ass_path = out_dir / ("%s.ass" % name)
+    lines = clip.subtitles if subtitles is None else subtitles
+    ass_path.write_text(build_ass(lines, cfg.subtitle_style), encoding="utf-8")
 
-    out_path = out_dir / ("%s.mp4" % clip.clip_id)
+    out_path = out_dir / ("%s.mp4" % name)
     media.run(
         build_command(
-            clip, cfg.source_video, ass_path, out_path, width, height, cfg.audio_track, hdr
+            clip,
+            cfg.source_video,
+            ass_path,
+            out_path,
+            width,
+            height,
+            cfg.audio_track,
+            hdr,
+            voiceover,
+            bed_db if bed_db is not None else float(cfg.voiceover.get("original_audio_db", -18.0)),
         )
     )
     return str(out_path)

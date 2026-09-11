@@ -147,6 +147,21 @@ def cmd_auth(args) -> int:
     return 0
 
 
+def cmd_voices(args) -> int:
+    from . import voice
+
+    try:
+        voices = voice.list_voices()
+    except voice.VoiceError as exc:
+        print("cannot list voices: %s" % exc, file=sys.stderr)
+        return 1
+    for v in voices:
+        labels = ", ".join("%s" % value for value in v["labels"].values() if value)
+        print("%-22s %-24s %-10s %s" % (v["voice_id"], v["name"][:24], v["category"], labels))
+    print("\n%d voices. Put ids under voiceover.voices in the run config, one per platform." % len(voices))
+    return 0
+
+
 def _youtube_status() -> str:
     from . import auth
 
@@ -166,6 +181,7 @@ def cmd_doctor(args) -> int:
         ("TIKTOK_ACCESS_TOKEN", bool(os.getenv("TIKTOK_ACCESS_TOKEN"))),
         ("IG_ACCESS_TOKEN", bool(os.getenv("IG_ACCESS_TOKEN"))),
         ("YouTube sign-in", _youtube_status()),
+        ("ELEVENLABS_API_KEY", bool(os.getenv("ELEVENLABS_API_KEY"))),
     ]
     for name, value in rows:
         print("%-22s %s" % (name, value))
@@ -210,6 +226,9 @@ def main(argv=None) -> int:
     sp = sub.add_parser("auth", help="sign in to a platform once, in the browser")
     sp.add_argument("platform", choices=["youtube"])
     sp.set_defaults(handler=cmd_auth)
+
+    sp = sub.add_parser("voices", help="list the ElevenLabs voices your account can use")
+    sp.set_defaults(handler=cmd_voices)
 
     sp = sub.add_parser("doctor", help="check tooling and credentials")
     sp.set_defaults(handler=cmd_doctor)
