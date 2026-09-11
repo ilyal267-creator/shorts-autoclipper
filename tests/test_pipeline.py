@@ -357,6 +357,18 @@ def test_load_env_reads_a_powershell_written_file():
             finally:
                 os.environ.pop(key, None)
 
+        # What Notepad actually wrote on a real machine: a UTF-16 BOM in front of 8-bit text,
+        # and on a second save a pasted line appended as genuine UTF-16. Trusting the BOM
+        # decoded the lot as noise; every line here has to come back intact.
+        from shorts.__main__ import decode_env
+
+        hybrid = b"\xff\xfe" + b"FIRST=one\nSECOND=two\n"
+        assert decode_env(hybrid).splitlines()[:2] == ["FIRST=one", "SECOND=two"]
+        mixed = b"\xff\xfe" + b"FIRST=one\n" + "THIRD=three".encode("utf-16-le")
+        assert decode_env(mixed).splitlines() == ["FIRST=one", "THIRD=three"]
+        crlf16 = "﻿A=1\r\nB=2\r\n".encode("utf-16-le")  # PowerShell, Windows line ends
+        assert decode_env(crlf16).splitlines()[:2] == ["A=1", "B=2"]
+
         # Undecodable bytes are survivable: no exception, and nothing bogus exported.
         broken = Path(tmp) / "broken.env"
         broken.write_bytes(b"\x80\x81\x82 not really text\n")

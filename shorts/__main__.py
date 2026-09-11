@@ -13,11 +13,33 @@ from . import agent, config as config_mod, run as run_mod
 
 
 def decode_env(data: bytes) -> str:
-    """PowerShell's `>>` writes UTF-16; cmd and editors write UTF-8, sometimes with a BOM."""
-    for bom, encoding in ((b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"), (b"\xef\xbb\xbf", "utf-8-sig")):
+    """Read a .env whatever wrote it — deciding from the bytes, not from the byte-order mark.
+
+    PowerShell's `>>` writes UTF-16. Editors write UTF-8, sometimes with a BOM. And Notepad
+    was seen writing a UTF-16 BOM in front of plain 8-bit text, then appending a pasted line
+    as real UTF-16 — one file, two encodings. Trusting the BOM turned all of it to noise.
+    So: strip any BOM, and decode each line by what its bytes are. ASCII text in UTF-16 has
+    a NUL beside every character; in UTF-8 it has none.
+    """
+    for bom in (b"\xff\xfe", b"\xfe\xff", b"\xef\xbb\xbf"):
         if data.startswith(bom):
-            return data.decode(encoding, errors="replace")
-    return data.decode("utf-8", errors="replace")
+            data = data[len(bom):]
+            break
+    # Whole-file UTF-16 puts a NUL at every other byte. Counting NULs overall is not enough:
+    # a short file mixing one ASCII line with one UTF-16 line can clear that bar too.
+    odd = data[1::2]
+    if len(data) % 2 == 0 and odd and odd.count(0) >= 0.9 * len(odd):
+        return data.decode("utf-16-le", errors="replace").replace("\r", "")
+
+    lines = []
+    for raw in data.split(b"\n"):
+        raw = raw.lstrip(b"\x00")  # the half of a UTF-16 newline left on the next line
+        raw = raw.replace(b"\r\x00", b"").replace(b"\r", b"")
+        if b"\x00" in raw:
+            lines.append(raw.decode("utf-16-le", errors="replace").strip("﻿\x00"))
+        else:
+            lines.append(raw.decode("utf-8", errors="replace"))
+    return "\n".join(lines)
 
 
 def load_env(path: str | Path = ".env") -> list[str]:
