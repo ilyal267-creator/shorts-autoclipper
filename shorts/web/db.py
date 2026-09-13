@@ -50,6 +50,18 @@ MIGRATIONS = [
     CREATE INDEX runs_by_user ON runs (user_id, created_at);
     CREATE INDEX runs_by_status ON runs (status, queued_at);
     """,
+    """
+    ALTER TABLE runs ADD COLUMN cancel_requested_at TEXT;
+    CREATE TABLE run_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        stage TEXT,
+        message TEXT NOT NULL,
+        data_json TEXT
+    );
+    CREATE INDEX run_events_by_run ON run_events (run_id, id);
+    """,
 ]
 
 

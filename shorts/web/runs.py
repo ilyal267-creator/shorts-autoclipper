@@ -224,4 +224,118 @@ def register(app, page) -> None:
                 )
         finally:
             conn.close()
-        return RedirectResponse("/runs", status_code=303)  # the progress page arrives with the worker
+        return RedirectResponse("/runs/%s" % run_id, status_code=303)
+
+    @app.get("/runs/{run_id}")
+    def run_page(request: Request, run_id: str):
+        run = owned_run(app.state.db_path, run_id, request.state.user["id"])
+        if run["status"] == "uploaded":
+            return RedirectResponse("/runs/%s/setup" % run_id, status_code=303)
+        return page(request, "progress.html", nav="runs", run=run, progress=progress(app.state.db_path, run))
+
+    @app.get("/api/runs/{run_id}/progress")
+    def run_progress(request: Request, run_id: str):
+        return progress(app.state.db_path, owned_run(app.state.db_path, run_id, request.state.user["id"]))
+
+    @app.post("/runs/{run_id}/cancel")
+    def cancel(request: Request, run_id: str):
+        owned_run(app.state.db_path, run_id, request.state.user["id"])
+        conn = db.connect(app.state.db_path)
+        try:
+            with conn:
+                # queued: nothing has started, so it simply never will; running: the worker
+                # stops at the next stage it enters
+                conn.execute(
+                    "UPDATE runs SET status = 'cancelled', finished_at = datetime('now') WHERE id = ? AND status = 'queued'",
+                    (run_id,),
+                )
+                conn.execute(
+                    "UPDATE runs SET cancel_requested_at = datetime('now') WHERE id = ? AND status = 'running'",
+                    (run_id,),
+                )
+        finally:
+            conn.close()
+        return RedirectResponse("/runs/%s" % run_id, status_code=303)
+
+
+STAGE_LABELS = [
+    ("probe", "Read the video"),
+    ("transcribe", "Transcribe"),
+    ("plan", "Pick the clips"),
+    ("copy", "Write hooks, captions and narration"),
+    ("compliance", "Check compliance"),
+    ("voiceover", "Record voiceovers"),
+    ("render", "Render"),
+    ("deliver", "Save drafts for review"),
+]
+# a whole token that starts at a drive letter or a root slash, down to its last separator
+ABSOLUTE_PATH = re.compile(r"(?<!\S)(?:[A-Za-z]:)?[\\/](?:[^\s\\/]+[\\/])*([^\s\\/]+)")
+PER_CLIP = {"copy", "compliance", "voiceover", "render", "deliver"}
+HEADLINES = {
+    "queued": "Waiting to start",
+    "running": "Working",
+    "needs_review": "Drafts ready",
+    "no_clips": "No clips cleared the bar",
+    "failed": "This run failed",
+    "cancelled": "Cancelled",
+}
+
+
+def progress(db_path, run) -> dict:
+    """Everything the progress screen shows, from the run row and its event log."""
+    conn = db.connect(db_path)
+    try:
+        events = conn.execute(
+            "SELECT at, stage, message, data_json FROM run_events WHERE run_id = ? ORDER BY id", (run["id"],)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    narrated = json.loads(run["config_json"] or "{}").get("voiceover", {}).get("enabled")
+    keys = [key for key, _ in STAGE_LABELS if narrated or key != "voiceover"]
+    clips = next((json.loads(e["data_json"]) for e in reversed(events) if e["stage"] == "plan" and e["data_json"]), [])
+    current = run["stage"] if run["status"] == "running" else None
+    reached = keys.index(run["stage"]) if run["stage"] in keys else -1
+    clip_now = next((e["message"].split(":")[0] for e in reversed(events) if e["stage"] in PER_CLIP), None)
+    finished_ok = run["status"] in ("needs_review", "no_clips")
+
+    stages = []
+    for key, label in STAGE_LABELS:
+        if key not in keys:
+            continue
+        position = keys.index(key)
+        if finished_ok or position < reached:
+            state = "done"
+        elif key == current:
+            state = "active"
+        elif position == reached:  # where a failed or cancelled run stopped
+            state = "stopped"
+        else:
+            state = "pending"
+        detail = ""
+        if key == "plan" and state == "done" and clips:
+            detail = "%d found" % len(clips)
+        elif state == "active" and key in PER_CLIP and clip_now and clips:
+            ids = [c["clip_id"] for c in clips]
+            if clip_now in ids:
+                detail = "Clip %d of %d" % (ids.index(clip_now) + 1, len(ids))
+        stages.append({"key": key, "label": label, "state": state, "detail": detail})
+
+    return {
+        "status": run["status"],
+        "headline": HEADLINES.get(run["status"], run["status"]),
+        "terminal": run["status"] not in ("queued", "running"),
+        "cancelling": bool(run["cancel_requested_at"]) and run["status"] == "running",
+        "error": hide_paths(run["error"]) if run["error"] else None,
+        "stages": stages,
+        "clips": [
+            {**c, "span": "%s–%s" % (duration_text(c["start"]), duration_text(c["end"])), "length": "%.1fs" % c["duration"]}
+            for c in clips
+        ],
+        "log": ["%s  %s" % (e["at"][11:19], hide_paths(e["message"])) for e in events[-60:]],
+    }
+
+
+def hide_paths(message: str) -> str:
+    """Testers see file names, never where the server keeps them."""
+    return ABSOLUTE_PATH.sub(r"\1", message)

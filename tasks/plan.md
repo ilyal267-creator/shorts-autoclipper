@@ -78,7 +78,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 
 ### Phase 2: The run loop
 - [x] T4: New run: upload, probe, settings
-- [ ] T5: Worker runs it; progress screen follows it
+- [x] T5: Worker runs it; progress screen follows it
 - [ ] T6: Runs list
 - [ ] T7: Review clips: watch, approve, edit copy
 

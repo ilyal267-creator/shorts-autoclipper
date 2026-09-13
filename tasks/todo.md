@@ -130,13 +130,13 @@ progress screen (`design/Progress.dc.html`) polls a JSON endpoint every 2 s: sta
 stages. A worker restart marks an interrupted run failed instead of leaving it "running" forever.
 
 **Acceptance criteria:**
-- [ ] A queued mock-provider run moves through every stage on the screen without a reload and ends in "Needs review"
-- [ ] Cancel during transcription ends the run as cancelled within one stage
-- [ ] Killing the worker mid-run leaves the run marked failed, with the reason, after the next worker start
+- [x] A queued mock-provider run moves through every stage on the screen without a reload and ends in "Needs review"
+- [x] Cancel during transcription ends the run as cancelled within one stage
+- [x] Killing the worker mid-run leaves the run marked failed, with the reason, after the next worker start
 
 **Verification:**
-- [ ] `python tests/test_web.py`: worker loop on a generated clip with the mock provider, events stored in order
-- [ ] Manual: a real 2-minute talking video with the real provider; watch the screen go to done
+- [x] `python tests/test_web.py`: worker loop on a generated clip with the mock provider, events stored in order
+- [x] Manual: a 105 s talking video (Windows speech over a test picture) with Claude: 2 clips picked and rendered, screen followed it live; a no-speech file failed with its reason shown
 
 **Dependencies:** T1, T4
 

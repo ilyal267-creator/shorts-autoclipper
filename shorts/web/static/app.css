@@ -169,3 +169,36 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   .setup-source { position: static; max-width: none; width: 100%; }
   .choice-grid { grid-template-columns: 1fr; }
 }
+
+/* run progress */
+.faint { color: var(--faint); }
+.topbar a.dim:hover { color: var(--text); }
+.progress-layout { display: flex; gap: 32px; padding: 24px 28px; align-items: flex-start; }
+.progress-stages { width: 420px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
+.progress-headline { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-self: stretch; }
+.stage { position: relative; display: flex; gap: 14px; min-height: 54px; }
+.stage:not(:last-child)::before { content: ""; position: absolute; left: 10px; top: 24px; bottom: 2px; width: 2px; background: var(--line-strong); }
+.stage.is-done:not(:last-child)::before { background: #2c3f33; }
+.stage-mark { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #34363b; flex-shrink: 0; position: relative; z-index: 1; background: var(--bg); }
+.stage.is-done .stage-mark { border: 0; background: #1d2e24 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237cc59a' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.stage.is-active .stage-mark { border-color: var(--accent); border-right-color: transparent; animation: spin 1s linear infinite; }
+.stage.is-stopped .stage-mark { border-color: var(--bad); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stage.is-active .stage-mark { animation: none; border-right-color: var(--accent); } }
+.stage-text { display: flex; flex-direction: column; gap: 2px; padding-top: 1px; }
+.stage-label { font-size: 14px; color: var(--muted); }
+.stage.is-done .stage-label { color: var(--text); font-weight: 500; }
+.stage.is-active .stage-label { color: var(--accent-hover); font-weight: 600; }
+.stage.is-stopped .stage-label { color: var(--bad); }
+.stage-detail { font-size: 13px; color: var(--dim); }
+.stage-detail:empty { display: none; }
+
+.progress-side { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.found { list-style: none; margin: 0 0 12px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.found li { display: flex; gap: 16px; padding: 14px 16px; line-height: 1.45; }
+.found li + li { border-top: 1px solid var(--line); }
+.found-when { width: 110px; flex-shrink: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.log { margin: 0; height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #0a0b0c; padding: 14px 16px; font-size: 12px; line-height: 1.75; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.btn[disabled] { opacity: 0.6; cursor: default; }
+@media (max-width: 1000px) { .progress-layout { flex-direction: column; } .progress-stages { width: 100%; } }

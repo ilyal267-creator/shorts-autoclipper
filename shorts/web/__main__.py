@@ -1,4 +1,4 @@
-"""python -m shorts.web serve | invite <email> | revoke <email> | testers"""
+"""python -m shorts.web serve | worker | invite <email> | revoke <email> | testers"""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ def main(argv=None) -> int:
     serve = commands.add_parser("serve", help="run the dashboard")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    commands.add_parser("worker", help="run queued runs, one at a time")
     commands.add_parser("invite", help="let an email sign in").add_argument("email")
     commands.add_parser("revoke", help="stop an email signing in and end its sessions").add_argument("email")
     commands.add_parser("testers", help="list invited emails")
@@ -27,6 +28,10 @@ def main(argv=None) -> int:
         import uvicorn
 
         uvicorn.run(create_app(), host=args.host, port=args.port)
+    elif args.command == "worker":
+        from .worker import work
+
+        work(db_path)
     elif args.command == "invite":
         db.migrate(db_path)
         print(auth.invite(db_path, args.email))

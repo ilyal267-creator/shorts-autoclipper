@@ -240,6 +240,116 @@ def test_uploads_over_the_limits_or_unreadable_are_refused_and_leave_nothing():
         assert stranger.post("/api/uploads", content=b"x").status_code == 401
 
 
+def queue_run(db_path: Path, work: Path, user_email: str = "tester@example.com", narrated: bool = False) -> str:
+    """A queued run straight into the database, with a transcript so no whisper is needed."""
+    from test_render_e2e import make_source, make_transcript  # same folder as this file
+
+    source, transcript = work / "source.mp4", work / "transcript.json"
+    if not source.exists():
+        make_source(source)
+        make_transcript(transcript)
+    conn = db.connect(db_path)
+    user = conn.execute("SELECT id FROM users WHERE email = ?", (user_email,)).fetchone()
+    run_id = "run%d" % (conn.execute("SELECT count(*) FROM runs").fetchone()[0] + 1)
+    raw = {
+        "source_video": str(source), "source_transcript": str(transcript),
+        "connected_accounts": [{"platform": "tiktok", "account_id": "pending", "handle": ""},
+                               {"platform": "youtube_shorts", "account_id": "pending", "handle": ""}],
+        "clip_count": 2, "clip_length_range": [10, 30], "posting_mode": "draft_for_approval",
+        "rights_confirmed": True, "voiceover": {"enabled": narrated}, "output_dir": str(work / run_id / "out"),
+    }
+    with conn:
+        conn.execute(
+            """INSERT INTO runs (id, user_id, status, source_name, source_path, source_bytes, probe_json, config_json, queued_at)
+               VALUES (?, ?, 'queued', 'talk.mp4', ?, 1, '{"audio_codecs": ["aac"]}', ?, datetime('now'))""",
+            (run_id, user["id"], str(source), json.dumps(raw)),
+        )
+    conn.close()
+    return run_id
+
+
+def test_the_worker_runs_a_queued_run_and_the_progress_screen_follows_it():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts.web import worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+        run_id = queue_run(db_path, Path(tmp))
+
+        waiting = client.get("/api/runs/%s/progress" % run_id).json()
+        assert waiting["status"] == "queued" and not waiting["terminal"]
+        assert all(s["state"] == "pending" for s in waiting["stages"])
+        assert "voiceover" not in [s["key"] for s in waiting["stages"]]  # not narrated, so not shown
+
+        worker.work(db_path, once=True)
+
+        done = client.get("/api/runs/%s/progress" % run_id).json()
+        assert done["status"] == "needs_review" and done["terminal"], done
+        assert all(s["state"] == "done" for s in done["stages"]), done["stages"]
+        assert [c["clip_id"] for c in done["clips"]] == ["clip_1", "clip_2"]
+        assert any("clip_2: delivering" in line for line in done["log"])
+        assert any(line.endswith("-> clip_1.mp4") for line in done["log"]), done["log"]
+        assert not any(str(Path(tmp)) in line or tmp.replace("\\", "/") in line for line in done["log"])
+        page = client.get("/runs/%s" % run_id)
+        assert page.status_code == 200 and "Drafts ready" in page.text and "Cancel run" not in page.text
+
+        conn = db.connect(db_path)
+        row = conn.execute("SELECT summary_json, started_at, finished_at FROM runs WHERE id = ?", (run_id,)).fetchone()
+        stages = [r[0] for r in conn.execute("SELECT stage FROM run_events WHERE run_id = ? AND stage IS NOT NULL ORDER BY id", (run_id,))]
+        conn.close()
+        assert json.loads(row["summary_json"])["clips"][0]["platforms"]["tiktok"]["status"] == "draft"
+        assert row["started_at"] and row["finished_at"]
+        assert stages[:3] == ["probe", "transcribe", "plan"] and stages[-1] == "deliver"
+
+        other, _ = app_client(tmp)
+        auth.invite(db_path, "other@example.com")
+        sign_in(other, "other@example.com")
+        assert other.get("/api/runs/%s/progress" % run_id).status_code == 404
+        assert other.post("/runs/%s/cancel" % run_id, follow_redirects=False).status_code == 404
+
+
+def test_cancel_and_a_dead_worker_both_end_a_run_with_the_reason():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts.web import worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+
+        # cancelled while still queued: it never starts
+        queued = queue_run(db_path, Path(tmp))
+        client.post("/runs/%s/cancel" % queued, follow_redirects=False)
+        assert worker.claim_next(db_path) is None
+        assert client.get("/api/runs/%s/progress" % queued).json()["status"] == "cancelled"
+
+        # cancelled while running: the worker stops at the next stage it enters
+        running = queue_run(db_path, Path(tmp))
+        claimed = worker.claim_next(db_path)
+        assert claimed["id"] == running
+        client.post("/runs/%s/cancel" % running, follow_redirects=False)
+        assert client.get("/api/runs/%s/progress" % running).json()["cancelling"]
+        assert worker.execute(db_path, claimed) == "cancelled"
+        conn = db.connect(db_path)
+        events = conn.execute("SELECT count(*) FROM run_events WHERE run_id = ?", (running,)).fetchone()[0]
+        conn.close()
+        assert events == 1, events  # stopped at the very first stage, nothing rendered
+
+        # a worker that died mid-run: the next worker start says what happened
+        crashed = queue_run(db_path, Path(tmp))
+        worker.claim_next(db_path)
+        worker.work(db_path, once=True)
+        p = client.get("/api/runs/%s/progress" % crashed).json()
+        assert p["status"] == "failed" and "restarted" in p["error"]
+        assert "restarted" in client.get("/runs/%s" % crashed).text
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ run.source_name }} · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar">
+  <a class="dim" href="/runs">Runs</a><span class="faint">/</span>
+  <h1>{{ run.source_name }}</h1>
+  <div class="actions" id="run-actions">
+    {% if not progress.terminal %}
+    <form method="post" action="/runs/{{ run.id }}/cancel">
+      <button class="btn" type="submit" {% if progress.cancelling %}disabled{% endif %}>{{ "Cancelling…" if progress.cancelling else "Cancel run" }}</button>
+    </form>
+    {% endif %}
+  </div>
+</header>
+<div class="progress-layout" id="progress" data-url="/api/runs/{{ run.id }}/progress">
+  <section class="progress-stages">
+    <h2 class="progress-headline" data-bind="headline">{{ progress.headline }}</h2>
+    <p class="form-error" data-bind="error" {% if not progress.error %}hidden{% endif %}>{{ progress.error or "" }}</p>
+    <ol class="stages" data-bind="stages">
+      {% for s in progress.stages %}
+      <li class="stage is-{{ s.state }}"><span class="stage-mark" aria-hidden="true"></span>
+        <span class="stage-text"><span class="stage-label">{{ s.label }}</span><span class="stage-detail">{{ s.detail }}</span></span></li>
+      {% endfor %}
+    </ol>
+    <a class="btn btn-primary" href="/runs" data-bind="done" {% if not progress.terminal %}hidden{% endif %}>Back to runs</a>
+  </section>
+  <section class="progress-side">
+    <div class="label">Clips found</div>
+    <ul class="found" data-bind="clips">
+      {% for c in progress.clips %}
+      <li><span class="found-when mono">{{ c.span }}<br>{{ c.length }}</span><span>{{ c.reason }}</span></li>
+      {% else %}
+      <li class="found-empty dim">Clips appear here once they're picked.</li>
+      {% endfor %}
+    </ul>
+    <div class="label">Log</div>
+    <pre class="log mono" data-bind="log">{{ progress.log|join("\n") }}</pre>
+  </section>
+</div>
+<script src="/static/progress.js"></script>
+{% endblock %}
