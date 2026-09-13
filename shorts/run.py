@@ -358,6 +358,7 @@ class Run:
             "source_video": self.cfg.source_video,
             "generated_by": provider,
             "posting_mode": self.cfg.posting_mode,
+            "voices": self.voices,  # platform -> ElevenLabs voice id; empty when not narrated
             "clips": clips,
             "excluded_segments": self.excluded,
             "flags_for_human_review": self.flags,

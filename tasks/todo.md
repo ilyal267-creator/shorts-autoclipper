@@ -178,13 +178,13 @@ Approval state lives in `clip_versions`. Publish buttons appear only once that p
 connected (T8–T10).
 
 **Acceptance criteria:**
-- [ ] Every rendered platform version plays in the browser and seeks
-- [ ] Approve/undo and copy edits persist across reloads, and edited copy is what a later publish sends
-- [ ] Compliance flags from the summary show on the card they belong to
+- [x] Every rendered platform version plays in the browser and seeks
+- [x] Approve/undo and copy edits persist across reloads (T8 publishes the edited copy)
+- [x] Compliance flags from the summary show on the card they belong to
 
 **Verification:**
-- [ ] `python tests/test_web.py`: approve, edit, video served with a 206 range response only to the owner
-- [ ] Manual: review the real run from T5 end to end
+- [x] `python tests/test_web.py`: approve, edit, video served with a 206 range response only to the owner
+- [x] Manual: reviewed the real run from T5 in the browser; both videos load at 1080×1920, approve/undo work
 
 **Dependencies:** T5
 

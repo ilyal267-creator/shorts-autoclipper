@@ -62,6 +62,21 @@ MIGRATIONS = [
     );
     CREATE INDEX run_events_by_run ON run_events (run_id, id);
     """,
+    """
+    -- one row per (clip, platform) draft: what the tester approved and the copy as they edited it
+    CREATE TABLE clip_versions (
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        clip_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'draft',
+        title TEXT,
+        caption TEXT,
+        hashtags_json TEXT NOT NULL DEFAULT '[]',
+        edited_at TEXT,
+        approved_at TEXT,
+        PRIMARY KEY (run_id, clip_id, platform)
+    );
+    """,
 ]
 
 

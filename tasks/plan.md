@@ -80,7 +80,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [x] T4: New run: upload, probe, settings
 - [x] T5: Worker runs it; progress screen follows it
 - [x] T6: Runs list
-- [ ] T7: Review clips: watch, approve, edit copy
+- [x] T7: Review clips: watch, approve, edit copy
 
 ### Checkpoint 2
 - [ ] Locally, a real 2-minute video goes from upload to three reviewed drafts in the browser

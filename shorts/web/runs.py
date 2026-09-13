@@ -281,10 +281,12 @@ def register(app, page) -> None:
         return RedirectResponse("/runs/%s" % run_id, status_code=303)
 
     @app.get("/runs/{run_id}")
-    def run_page(request: Request, run_id: str):
+    def run_page(request: Request, run_id: str, clip: str = "", error: str = ""):
         run = owned_run(app.state.db_path, run_id, request.state.user["id"])
         if run["status"] == "uploaded":
             return RedirectResponse("/runs/%s/setup" % run_id, status_code=303)
+        if run["status"] == "needs_review":
+            return app.state.review_page(request, run, clip, error)
         return page(request, "progress.html", nav="runs", run=run, progress=progress(app.state.db_path, run))
 
     @app.get("/api/runs/{run_id}/progress")

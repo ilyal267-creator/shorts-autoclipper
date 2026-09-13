@@ -54,6 +54,7 @@
       if (response.status === 401) return window.location.assign("/signin");
       if (response.ok) {
         const p = await response.json();
+        if (p.status === "needs_review") return window.location.reload();  // the page becomes the review
         draw(p);
         if (p.terminal) return;
       }

@@ -295,7 +295,7 @@ def test_the_worker_runs_a_queued_run_and_the_progress_screen_follows_it():
         assert any(line.endswith("-> clip_1.mp4") for line in done["log"]), done["log"]
         assert not any(str(Path(tmp)) in line or tmp.replace("\\", "/") in line for line in done["log"])
         page = client.get("/runs/%s" % run_id)
-        assert page.status_code == 200 and "Drafts ready" in page.text and "Cancel run" not in page.text
+        assert page.status_code == 200 and "0 of 4 approved" in page.text and "Cancel run" not in page.text  # it's the review now
 
         conn = db.connect(db_path)
         row = conn.execute("SELECT summary_json, started_at, finished_at FROM runs WHERE id = ?", (run_id,)).fetchone()
@@ -393,6 +393,66 @@ def test_the_runs_list_shows_only_your_own_runs_in_every_state():
         for path in ("/runs/r_theirs", "/api/runs/r_theirs/progress", "/runs/r_theirs/setup", "/runs/nope"):
             assert client.get(path, follow_redirects=False).status_code == 404, path
         assert "Someone else" in other.get("/runs").text
+
+
+def test_review_plays_each_version_and_keeps_approvals_and_edits():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts.web import worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+        run_id = queue_run(db_path, Path(tmp))
+        worker.work(db_path, once=True)
+
+        page = client.get("/runs/%s" % run_id).text
+        assert "0 of 4 approved" in page and "Clip 1" in page and "Clip 2" in page
+        assert page.count('class="card ') == 2 and "TikTok" in page and "YouTube Shorts" in page
+        assert "MOCK provider" in page  # run-wide notes are shown before anything is approved
+        assert 'src="/runs/%s/media/clip_1.mp4#t=0.1"' % run_id in page
+
+        # the video plays and seeks (range requests), only for its owner, only files the run made
+        video = client.get("/runs/%s/media/clip_1.mp4" % run_id, headers={"Range": "bytes=0-99"})
+        assert video.status_code == 206 and len(video.content) == 100, video.status_code
+        assert video.headers["content-type"] == "video/mp4"
+        for name in ("clip_9.mp4", "..%2F..%2Fshorts.db", "summary.json"):
+            assert client.get("/runs/%s/media/%s" % (run_id, name)).status_code == 404, name
+        other, _ = app_client(tmp)
+        auth.invite(db_path, "other@example.com")
+        sign_in(other, "other@example.com")
+        assert other.get("/runs/%s/media/clip_1.mp4" % run_id).status_code == 404
+        assert other.post("/runs/%s/clips/clip_1/tiktok/approve" % run_id, follow_redirects=False).status_code == 404
+
+        # approve, undo, approve again: it sticks across reloads
+        base = "/runs/%s/clips/clip_1/tiktok" % run_id
+        assert client.post(base + "/approve", follow_redirects=False).headers["location"].endswith("#tiktok")
+        assert "1 of 4 approved" in client.get("/runs/%s" % run_id).text
+        client.post(base + "/unapprove")
+        assert "0 of 4 approved" in client.get("/runs/%s" % run_id).text
+        client.post(base + "/approve")
+
+        # an edit is saved, cleaned up, and sends the draft back for approval
+        client.post(base + "/copy", data={"caption": "Cut scope, not corners.", "hashtags": "coding, #DevTok #coding"})
+        edited = client.get("/runs/%s?clip=clip_1" % run_id).text
+        assert "Cut scope, not corners." in edited and "#coding #DevTok" in edited and "0 of 4 approved" in edited
+        conn = db.connect(db_path)
+        row = conn.execute("SELECT state, caption, hashtags_json FROM clip_versions WHERE run_id = ? AND clip_id = 'clip_1' AND platform = 'tiktok'", (run_id,)).fetchone()
+        conn.close()
+        assert row["state"] == "draft" and json.loads(row["hashtags_json"]) == ["#coding", "#DevTok"]
+
+        bad_tags = client.post(base + "/copy", data={"caption": "x", "hashtags": "#ok #not-ok!"}, follow_redirects=False)
+        assert bad_tags.headers["location"].endswith("error=hashtags#tiktok")
+        long_title = client.post("/runs/%s/clips/clip_1/youtube_shorts/copy" % run_id,
+                                 data={"title": "t" * 101, "caption": "x", "hashtags": ""}, follow_redirects=False)
+        assert "error=title" in long_title.headers["location"]
+        assert "A YouTube title needs" in client.get(long_title.headers["location"]).text
+        assert client.post("/runs/%s/clips/clip_7/tiktok/approve" % run_id, follow_redirects=False).status_code == 404
+
+        client.post("/runs/%s/approve-all" % run_id)
+        assert "All 4 approved" in client.get("/runs/%s" % run_id).text
 
 
 def test_migrations_run_once_and_survive_a_restart():

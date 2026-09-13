@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Review · {{ run.source_name }} · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar">
+  <a class="dim" href="/runs">Runs</a><span class="faint">/</span>
+  <h1>{{ run.source_name }}</h1>
+  <span class="pill {{ 'pill-ok' if approved == drafts else 'pill-accent' }}">
+    {% if approved == drafts %}All {{ drafts }} approved{% else %}{{ approved }} of {{ drafts }} approved{% endif %}
+  </span>
+  <div class="actions">
+    {% if approved < drafts %}
+    <form method="post" action="/runs/{{ run.id }}/approve-all"><button class="btn" type="submit">Approve all</button></form>
+    {% endif %}
+  </div>
+</header>
+
+<nav class="clip-tabs" aria-label="Clips">
+  {% for c in clips %}
+  <a href="/runs/{{ run.id }}?clip={{ c.id }}" {% if c.id == clip.id %}aria-current="page"{% endif %}>
+    {{ c.label }} <span class="mono">{{ c.length }} · {{ c.span }}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+<div class="review">
+  {% if clip.reason %}<p class="clip-reason"><span class="dim">Why this clip:</span> {{ clip.reason }}</p>{% endif %}
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  {% if clip.error %}<p class="form-error">This clip failed while it was being made: {{ clip.error }}</p>{% endif %}
+  {% if general_flags %}
+  <details class="notes">
+    <summary>{{ general_flags|length }} note{{ "s" if general_flags|length != 1 }} from the run to check before publishing</summary>
+    <ul>{% for f in general_flags %}<li>{{ f }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+
+  <div class="cards">
+    {% for card in clip.cards %}
+    <article class="card {% if card.approved %}is-approved{% endif %}" id="{{ card.platform }}">
+      <header class="card-head">
+        <span class="dot dot-{{ card.platform }}"></span>
+        <h2>{{ card.name }}</h2>
+        {% if card.voice %}
+        <span class="card-voice" title="Narrated by {{ card.voice }}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4"/></svg>{{ card.voice }}</span>
+        {% endif %}
+      </header>
+
+      {% if card.status != "draft" %}
+      <p class="card-excluded">{{ "Left out" if card.status == "excluded" else "Not made" }}: {{ card.reason }}</p>
+      {% else %}
+      <div class="card-body">
+        {% if card.video %}
+        <video class="card-video" src="{{ card.video }}#t=0.1" controls preload="metadata" playsinline></video>
+        {% endif %}
+        <div class="card-copy">
+          {% if card.limits.title %}
+          <div><div class="field-name">Title</div><div class="copy-main">{{ card.title }}</div></div>
+          {% elif card.hook %}
+          <div><div class="field-name">Hook</div><div class="copy-main">{{ card.hook }}</div></div>
+          {% endif %}
+          <div><div class="field-name">{{ "Description" if card.limits.title else "Caption" }}{% if card.edited %} · edited{% endif %}</div>
+            <div class="copy-soft">{{ card.caption }}</div></div>
+          <div class="mono copy-tags">{{ card.hashtags|join(" ") }}</div>
+        </div>
+      </div>
+
+      <div class="card-status">
+        {% if card.flags %}
+        <details>
+          <summary class="warn">{{ card.flags|length }} thing{{ "s" if card.flags|length != 1 }} to check</summary>
+          <ul>{% for f in card.flags %}<li>{{ f }}</li>{% endfor %}</ul>
+        </details>
+        {% else %}
+        <span class="ok">Compliance passed{% if card.synthetic %} · AI voice disclosed{% endif %}</span>
+        {% endif %}
+      </div>
+
+      <details class="card-edit">
+        <summary class="btn">Edit copy</summary>
+        <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/copy">
+          {% if card.limits.title %}
+          <label class="label" for="title-{{ card.platform }}">Title</label>
+          <input class="input" id="title-{{ card.platform }}" name="title" value="{{ card.title or '' }}" maxlength="{{ card.limits.title }}" required>
+          {% endif %}
+          <label class="label" for="caption-{{ card.platform }}">{{ "Description" if card.limits.title else "Caption" }}</label>
+          <textarea class="input textarea" id="caption-{{ card.platform }}" name="caption" rows="4" maxlength="{{ card.limits.caption }}">{{ card.caption or '' }}</textarea>
+          <label class="label" for="tags-{{ card.platform }}">Hashtags, up to {{ card.limits.hashtags }}</label>
+          <input class="input" id="tags-{{ card.platform }}" name="hashtags" value="{{ card.hashtags|join(' ') }}">
+          <p class="dim small">The voiceover and on-screen captions are part of the video and don't change here. Saving sends this draft back for approval.</p>
+          <button class="btn btn-primary" type="submit">Save copy</button>
+        </form>
+      </details>
+
+      <div class="card-actions">
+        {% if card.approved %}
+        <span class="approved-mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approved</span>
+        <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/unapprove"><button class="btn" type="submit">Undo</button></form>
+        {% else %}
+        <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/approve"><button class="btn btn-approve" type="submit">Approve</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
