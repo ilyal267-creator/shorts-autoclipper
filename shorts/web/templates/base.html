@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Shorts Autoclipper{% endblock %}</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+{% block body %}
+<div class="shell">
+  <nav class="sidebar" aria-label="Main">
+    <a class="brand" href="/runs">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e9b44c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 8.5v7l5.5-3.5z"/></svg>
+      Shorts Autoclipper
+    </a>
+    <div class="nav">
+      <a href="/runs/new" {% if nav == "new" %}aria-current="page"{% endif %}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New run</a>
+      <a href="/runs" {% if nav == "runs" %}aria-current="page"{% endif %}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Runs</a>
+      <a href="/accounts" {% if nav == "accounts" %}aria-current="page"{% endif %}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c.8-3.4 3.2-5 6-5s5.2 1.6 6 5M17 4.5a3.5 3.5 0 0 1 0 7M19 15c1.2.7 2 2.3 2.4 5"/></svg>Accounts &amp; voices</a>
+    </div>
+    {% if user %}
+    <div class="me">
+      <div class="avatar" aria-hidden="true">{{ user.initials }}</div>
+      <div>
+        <div class="me-name">{{ user.display_name }}</div>
+        <div class="me-role">Invited tester</div>
+      </div>
+    </div>
+    {% endif %}
+  </nav>
+  <main class="main">
+    {% block main %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+</body>
+</html>

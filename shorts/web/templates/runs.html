@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Runs · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar">
+  <h1>Runs</h1>
+  <div class="actions">
+    <a class="btn btn-primary" href="/runs/new">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New run</a>
+  </div>
+</header>
+<div class="content">
+  {% if not runs %}
+  <div class="empty">
+    <h2>No runs yet</h2>
+    <p>Upload a long video and get a draft of each clip for TikTok, Reels and Shorts to review.</p>
+    <a class="btn btn-primary" href="/runs/new">Start your first run</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

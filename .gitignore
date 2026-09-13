@@ -8,3 +8,7 @@ build/
 run.json
 render-check/
 .secrets/
+data/
+# the assembled design canvas is published as an artifact; the .dc.html sources are kept
+design/*.html
+!design/*.dc.html

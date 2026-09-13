@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0e0f11; color: #e7e5e1; font-family: 'Geist', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #e9b44c; } a:hover { color: #f3c96f; }
+    .mono { font-family: 'Geist Mono', ui-monospace, Consolas, monospace; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #0e0f11;">
+
+  <div style="width: 224px; flex-shrink: 0; background: #131417; border-right: 1px solid #23252a; display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box; gap: 28px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e9b44c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M10 8.5v7l5.5-3.5z"></path></svg>
+      <div style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">Shorts Autoclipper</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>New run</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; background: #1f2125; color: #f1efeb; font-size: 14px; font-weight: 500;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>Runs</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c.8-3.4 3.2-5 6-5s5.2 1.6 6 5M17 4.5a3.5 3.5 0 0 1 0 7M19 15c1.2.7 2 2.3 2.4 5"></path></svg>Accounts &amp; voices</div>
+    </div>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid #23252a;">
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: #2a2c31; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">IY</div>
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 13px;">Ilya</div>
+        <div style="font-size: 12px; color: #7d7f85;">Invited tester</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <div style="height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 28px; border-bottom: 1px solid #23252a;">
+      <div style="font-size: 15px; font-weight: 600;">Runs</div>
+      <div style="margin-left: auto; height: 36px; padding: 0 14px; border-radius: 7px; background: #e9b44c; color: #17130a; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>New run</div>
+    </div>
+
+    <div style="padding: 24px 28px; display: flex; flex-direction: column;">
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; padding: 0 16px 10px; font-size: 12px; color: #7d7f85; text-transform: uppercase; letter-spacing: 0.06em;">
+        <div>Source video</div><div>Started</div><div>Clips</div><div>Platforms</div><div>Mode</div><div>Status</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; align-items: center; height: 64px; padding: 0 16px; border-top: 1px solid #23252a; font-size: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><div style="font-weight: 500;">11.09 recording</div><div class="mono" style="font-size: 12px; color: #7d7f85;">1:24:10 · 1920×1080</div></div>
+        <div style="color: #c4c2be;">Today, 15:20</div>
+        <div class="mono">3</div>
+        <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 8px; height: 8px; border-radius: 50%; background: #5ec4d2;"></div><div style="width: 8px; height: 8px; border-radius: 50%; background: #d488bd;"></div><div style="width: 8px; height: 8px; border-radius: 50%; background: #e0876a;"></div><span style="color: #9a9ca2; font-size: 13px; margin-left: 4px;">3 platforms</span></div>
+        <div style="color: #c4c2be;">Draft for approval</div>
+        <div style="height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid #3a3322; color: #e9b44c; font-size: 12px; display: flex; align-items: center; justify-self: start;">Needs review</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; align-items: center; height: 64px; padding: 0 16px; border-top: 1px solid #23252a; font-size: 14px; background: #131417;">
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><div style="font-weight: 500;">Product demo, September</div><div class="mono" style="font-size: 12px; color: #7d7f85;">42:03 · 3840×2160 HDR</div></div>
+        <div style="color: #c4c2be;">Today, 14:02</div>
+        <div class="mono">—</div>
+        <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 8px; height: 8px; border-radius: 50%; background: #5ec4d2;"></div><div style="width: 8px; height: 8px; border-radius: 50%; background: #e0876a;"></div><span style="color: #9a9ca2; font-size: 13px; margin-left: 4px;">2 platforms</span></div>
+        <div style="color: #c4c2be;">Draft for approval</div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 12px; color: #c4c2be;">Writing copy</div>
+          <div style="height: 4px; border-radius: 2px; background: #26282d;"><div style="width: 48%; height: 4px; border-radius: 2px; background: #e9b44c;"></div></div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; align-items: center; height: 64px; padding: 0 16px; border-top: 1px solid #23252a; font-size: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><div style="font-weight: 500;">Podcast ep. 12</div><div class="mono" style="font-size: 12px; color: #7d7f85;">1:02:47 · 1920×1080</div></div>
+        <div style="color: #c4c2be;">10 Sep, 18:45</div>
+        <div class="mono">4</div>
+        <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 8px; height: 8px; border-radius: 50%; background: #e0876a;"></div><span style="color: #9a9ca2; font-size: 13px; margin-left: 4px;">YouTube Shorts</span></div>
+        <div style="color: #c4c2be;">Scheduled</div>
+        <div style="height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid #23392c; color: #7cc59a; font-size: 12px; display: flex; align-items: center; justify-self: start;">2 posted · 2 queued</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; align-items: center; height: 64px; padding: 0 16px; border-top: 1px solid #23252a; font-size: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><div style="font-weight: 500;">CS2 match capture</div><div class="mono" style="font-size: 12px; color: #7d7f85;">18:22 · 2560×1440 · 3 audio tracks</div></div>
+        <div style="color: #c4c2be;">9 Sep, 21:10</div>
+        <div class="mono">1</div>
+        <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 8px; height: 8px; border-radius: 50%; background: #5ec4d2;"></div><div style="width: 8px; height: 8px; border-radius: 50%; background: #d488bd;"></div><div style="width: 8px; height: 8px; border-radius: 50%; background: #e0876a;"></div><span style="color: #9a9ca2; font-size: 13px; margin-left: 4px;">3 platforms</span></div>
+        <div style="color: #c4c2be;">Draft for approval</div>
+        <div style="height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid #2e3035; color: #9a9ca2; font-size: 12px; display: flex; align-items: center; justify-self: start;">Done</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr 0.7fr 1.6fr 1.2fr 1fr; gap: 16px; align-items: center; height: 64px; padding: 0 16px; border-top: 1px solid #23252a; border-bottom: 1px solid #23252a; font-size: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;"><div style="font-weight: 500;">Street walk, iPhone</div><div class="mono" style="font-size: 12px; color: #7d7f85;">6:41 · 1080×1920 HDR</div></div>
+        <div style="color: #c4c2be;">8 Sep, 12:30</div>
+        <div class="mono">0</div>
+        <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 8px; height: 8px; border-radius: 50%; background: #d488bd;"></div><span style="color: #9a9ca2; font-size: 13px; margin-left: 4px;">Instagram Reels</span></div>
+        <div style="color: #c4c2be;">Draft for approval</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid #45262a; color: #e58a8a; font-size: 12px; display: flex; align-items: center; align-self: start;">No clips</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

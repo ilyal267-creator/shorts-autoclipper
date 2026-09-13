@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0e0f11; color: #e7e5e1; font-family: 'Geist', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #e9b44c; } a:hover { color: #f3c96f; }
+    .mono { font-family: 'Geist Mono', ui-monospace, Consolas, monospace; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #0e0f11;">
+
+  <div style="width: 224px; flex-shrink: 0; background: #131417; border-right: 1px solid #23252a; display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box; gap: 28px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e9b44c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M10 8.5v7l5.5-3.5z"></path></svg>
+      <div style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">Shorts Autoclipper</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; background: #1f2125; color: #f1efeb; font-size: 14px; font-weight: 500;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>New run</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>Runs</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c.8-3.4 3.2-5 6-5s5.2 1.6 6 5M17 4.5a3.5 3.5 0 0 1 0 7M19 15c1.2.7 2 2.3 2.4 5"></path></svg>Accounts &amp; voices</div>
+    </div>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid #23252a;">
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: #2a2c31; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">IY</div>
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 13px;">Ilya</div>
+        <div style="font-size: 12px; color: #7d7f85;">Invited tester</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <div style="height: 64px; display: flex; align-items: center; padding: 0 28px; border-bottom: 1px solid #23252a;">
+      <div style="font-size: 15px; font-weight: 600;">New run</div>
+    </div>
+
+    <div style="display: flex; gap: 32px; padding: 24px 28px; flex-grow: 1; min-height: 0;">
+      <!-- form -->
+      <div style="width: 660px; flex-shrink: 0; display: flex; flex-direction: column; gap: 22px;">
+
+        <div style="display: flex; gap: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 13px; color: #9a9ca2;">Clips</div>
+            <div style="height: 44px; display: flex; align-items: center; border: 1px solid #2e3035; border-radius: 8px; background: #131417;">
+              <div style="width: 44px; text-align: center; color: #9a9ca2; font-size: 18px;">−</div>
+              <div class="mono" style="width: 40px; text-align: center; font-size: 15px;">3</div>
+              <div style="width: 44px; text-align: center; color: #9a9ca2; font-size: 18px;">+</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1;">
+            <div style="font-size: 13px; color: #9a9ca2;">Framing</div>
+            <div style="height: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; box-sizing: border-box; border: 1px solid #2e3035; border-radius: 8px; background: #131417; font-size: 14px;">
+              <div style="display: flex; align-items: center; justify-content: center; border-radius: 5px; color: #9a9ca2;">Planner decides</div>
+              <div style="display: flex; align-items: center; justify-content: center; border-radius: 5px; color: #9a9ca2;">Crop to 9:16</div>
+              <div style="display: flex; align-items: center; justify-content: center; border-radius: 5px; background: #26282d; font-weight: 500;">Fit whole frame</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 13px; color: #9a9ca2;">Platforms</div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+            <div style="height: 56px; border: 1px solid #3a3322; border-radius: 8px; background: #131417; padding: 0 14px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 18px; height: 18px; border-radius: 4px; background: #e9b44c; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#17130a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+              <div style="display: flex; flex-direction: column; gap: 1px;"><div style="font-size: 14px; font-weight: 500;">TikTok</div><div style="font-size: 12px; color: #7d7f85;">@ilya.tests</div></div>
+            </div>
+            <div style="height: 56px; border: 1px solid #2e3035; border-radius: 8px; background: #131417; padding: 0 14px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid #4b4d52; box-sizing: border-box;"></div>
+              <div style="display: flex; flex-direction: column; gap: 1px;"><div style="font-size: 14px; font-weight: 500; color: #9a9ca2;">Instagram Reels</div><div style="font-size: 12px; color: #e9b44c;">Connect account</div></div>
+            </div>
+            <div style="height: 56px; border: 1px solid #3a3322; border-radius: 8px; background: #131417; padding: 0 14px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 18px; height: 18px; border-radius: 4px; background: #e9b44c; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#17130a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+              <div style="display: flex; flex-direction: column; gap: 1px;"><div style="font-size: 14px; font-weight: 500;">YouTube Shorts</div><div style="font-size: 12px; color: #7d7f85;">Test channel</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="font-size: 13px; color: #9a9ca2;">AI voiceover</div>
+            <div style="width: 36px; height: 20px; border-radius: 10px; background: #e9b44c; position: relative;"><div style="position: absolute; right: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #17130a;"></div></div>
+            <div style="font-size: 12px; color: #7d7f85;">A new script per platform, read over the clip. The original sound stays underneath.</div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+            <div style="height: 44px; border: 1px solid #2e3035; border-radius: 8px; background: #131417; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #5ec4d2;"></div><span style="color: #9a9ca2;">TikTok</span><span style="margin-left: auto;">Liam</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d7f85" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+            <div style="height: 44px; border: 1px solid #2e3035; border-radius: 8px; background: #131417; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #e0876a;"></div><span style="color: #9a9ca2;">Shorts</span><span style="margin-left: auto;">Brian</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d7f85" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 13px; color: #9a9ca2;">When clips are ready</div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+            <div style="border: 1px solid #3a3322; border-radius: 8px; background: #17150f; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 14px; font-weight: 500;">Save drafts</div><div style="font-size: 12px; line-height: 1.4; color: #9a9ca2;">Nothing posts until you approve it</div></div>
+            <div style="border: 1px solid #2e3035; border-radius: 8px; background: #131417; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 14px; font-weight: 500;">Schedule</div><div style="font-size: 12px; line-height: 1.4; color: #9a9ca2;">Spread over the best posting times</div></div>
+            <div style="border: 1px solid #2e3035; border-radius: 8px; background: #131417; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 14px; font-weight: 500;">Publish</div><div style="font-size: 12px; line-height: 1.4; color: #9a9ca2;">Post as soon as each clip passes checks</div></div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: flex-start; gap: 10px; padding-top: 4px;">
+          <div style="width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; border-radius: 4px; background: #e9b44c; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#17130a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+          <div style="font-size: 14px; line-height: 1.45;">I own this video, or have permission to cut and post it, including any music in it.</div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="height: 48px; padding: 0 22px; border-radius: 8px; background: #e9b44c; color: #17130a; font-size: 15px; font-weight: 600; display: flex; align-items: center;">Start run</div>
+          <div style="font-size: 13px; color: #7d7f85;">About 8 minutes for a video this long.</div>
+        </div>
+      </div>
+
+      <!-- source -->
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+        <div style="font-size: 13px; color: #9a9ca2;">Source video</div>
+        <div style="border: 1px solid #23252a; border-radius: 10px; background: #131417; overflow: hidden; display: flex; flex-direction: column;">
+          <div style="height: 272px; background: linear-gradient(135deg, #4a5566, #1e232b); position: relative;">
+            <div class="mono" style="position: absolute; right: 10px; bottom: 10px; font-size: 12px; background: #000a; padding: 3px 7px; border-radius: 4px;">42:03</div>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="font-size: 14px; font-weight: 500;">product-demo-september.mov</div>
+              <div style="margin-left: auto; font-size: 13px; color: #9a9ca2;">Replace</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; font-size: 13px;">
+              <div style="color: #7d7f85;">Resolution</div><div class="mono">3840×2160</div>
+              <div style="color: #7d7f85;">Size</div><div class="mono">6.1 GB</div>
+              <div style="color: #7d7f85;">Colour</div><div>HDR, converted to SDR</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #23252a;">
+              <div style="font-size: 13px; color: #9a9ca2;">This file has 2 audio tracks. Which one has the speech?</div>
+              <div style="height: 44px; border: 1px solid #3a3322; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 14px;">Track 2 · microphone<svg style="margin-left: auto;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d7f85" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

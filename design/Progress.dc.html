@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0e0f11; color: #e7e5e1; font-family: 'Geist', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #e9b44c; } a:hover { color: #f3c96f; }
+    .mono { font-family: 'Geist Mono', ui-monospace, Consolas, monospace; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #0e0f11;">
+
+  <div style="width: 224px; flex-shrink: 0; background: #131417; border-right: 1px solid #23252a; display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box; gap: 28px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e9b44c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M10 8.5v7l5.5-3.5z"></path></svg>
+      <div style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">Shorts Autoclipper</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>New run</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; background: #1f2125; color: #f1efeb; font-size: 14px; font-weight: 500;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>Runs</div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px; color: #9a9ca2; font-size: 14px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c.8-3.4 3.2-5 6-5s5.2 1.6 6 5M17 4.5a3.5 3.5 0 0 1 0 7M19 15c1.2.7 2 2.3 2.4 5"></path></svg>Accounts &amp; voices</div>
+    </div>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid #23252a;">
+      <div style="width: 30px; height: 30px; border-radius: 50%; background: #2a2c31; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">IY</div>
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 13px;">Ilya</div>
+        <div style="font-size: 12px; color: #7d7f85;">Invited tester</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <div style="height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 28px; border-bottom: 1px solid #23252a;">
+      <div style="font-size: 14px; color: #7d7f85;">Runs</div>
+      <div style="font-size: 14px; color: #4b4d52;">/</div>
+      <div style="font-size: 15px; font-weight: 600;">Product demo, September</div>
+      <div class="mono" style="font-size: 12px; color: #9a9ca2;">running · 6:40</div>
+      <div style="margin-left: auto; height: 36px; padding: 0 14px; border-radius: 7px; border: 1px solid #2e3035; font-size: 14px; display: flex; align-items: center;">Cancel run</div>
+    </div>
+
+    <div style="display: flex; gap: 24px; padding: 24px 28px; flex-grow: 1; min-height: 0;">
+      <!-- stages -->
+      <div style="width: 420px; flex-shrink: 0; display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 20px;">
+          <div style="display: flex; align-items: baseline; gap: 10px;"><div style="font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Writing copy</div><div class="mono" style="font-size: 13px; color: #9a9ca2;">about 5 min left</div></div>
+          <div style="height: 6px; border-radius: 3px; background: #23252a;"><div style="width: 48%; height: 6px; border-radius: 3px; background: #e9b44c;"></div></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; background: #1d2e24; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7cc59a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div><div style="flex-grow: 1; width: 2px; background: #2c3f33;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; font-weight: 500;">Read the video</div><div style="font-size: 13px; color: #7d7f85;">42:03 · 4K HDR · 2 audio tracks, using track 2</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; background: #1d2e24; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7cc59a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div><div style="flex-grow: 1; width: 2px; background: #2c3f33;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; font-weight: 500;">Transcribe</div><div style="font-size: 13px; color: #7d7f85;">5,610 words in 2:05</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; background: #1d2e24; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7cc59a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div><div style="flex-grow: 1; width: 2px; background: #2e3035;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; font-weight: 500;">Pick the clips</div><div style="font-size: 13px; color: #7d7f85;">3 found, 27–38 seconds each</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #e9b44c; border-right-color: transparent; box-sizing: border-box; animation: spin 1s linear infinite;"></div><div style="flex-grow: 1; width: 2px; background: #2e3035;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; font-weight: 600; color: #f3c96f;">Write hooks, captions, narration</div><div style="font-size: 13px; color: #9a9ca2;">Clip 2 of 3</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #34363b; box-sizing: border-box;"></div><div style="flex-grow: 1; width: 2px; background: #2e3035;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; color: #9a9ca2;">Check compliance</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #34363b; box-sizing: border-box;"></div><div style="flex-grow: 1; width: 2px; background: #2e3035;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; color: #9a9ca2;">Record voiceovers</div><div style="font-size: 13px; color: #5d5f64;">6 narrations</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 58px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #34363b; box-sizing: border-box;"></div><div style="flex-grow: 1; width: 2px; background: #2e3035;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; color: #9a9ca2;">Render</div><div style="font-size: 13px; color: #5d5f64;">6 videos, 1080×1920</div></div>
+          </div>
+          <div style="display: flex; gap: 14px; height: 40px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 22px;"><div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #34363b; box-sizing: border-box;"></div></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px; color: #9a9ca2;">Save drafts for review</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- right -->
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 18px; min-width: 0;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-size: 13px; color: #9a9ca2;">Clips found</div>
+          <div style="display: flex; flex-direction: column; border: 1px solid #23252a; border-radius: 10px; background: #131417;">
+            <div style="display: flex; gap: 16px; padding: 14px 16px; align-items: flex-start;">
+              <div class="mono" style="width: 110px; flex-shrink: 0; font-size: 12px; color: #9a9ca2; line-height: 1.5;">3:12–3:40<br>27.5s</div>
+              <div style="font-size: 14px; line-height: 1.45;">The export finishing in one click, with a visible before and after. Clear hook in the first sentence.</div>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 14px 16px; align-items: flex-start; border-top: 1px solid #23252a;">
+              <div class="mono" style="width: 110px; flex-shrink: 0; font-size: 12px; color: #9a9ca2; line-height: 1.5;">17:05–17:43<br>38.0s</div>
+              <div style="font-size: 14px; line-height: 1.45;">A customer question answered live, ending on the answer. Two filler pauses cut.</div>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 14px 16px; align-items: flex-start; border-top: 1px solid #23252a;">
+              <div class="mono" style="width: 110px; flex-shrink: 0; font-size: 12px; color: #9a9ca2; line-height: 1.5;">31:40–32:11<br>31.2s</div>
+              <div style="font-size: 14px; line-height: 1.45;">Setup in under a minute. Strong opening, the ending trails off slightly.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1; min-height: 0;">
+          <div style="display: flex; align-items: center;"><div style="font-size: 13px; color: #9a9ca2;">Log</div><div style="margin-left: auto; font-size: 13px; color: #7d7f85;">Download log</div></div>
+          <div class="mono" style="flex-grow: 1; border: 1px solid #23252a; border-radius: 10px; background: #0a0b0c; padding: 14px 16px; font-size: 12px; line-height: 1.75; color: #9a9ca2; overflow: hidden; white-space: pre;">14:02:11  probe: 42:03, 3840x2160 HLG, audio tracks: aac, aac
+14:02:11  audio_track=1 (microphone) chosen by tester
+14:02:13  transcribe: faster-whisper (cpu, track 1), VAD on
+14:04:18  transcript: 5,610 words, 208 silences over 0.6s
+14:04:19  plan: claude-opus-5, timeline 4,377 lines
+14:05:40  plan: 3 clips, reframe=fit (forced by run settings)
+14:05:40  clip_1 3:12.0–3:39.5  cuts: 0
+14:05:40  clip_2 17:05.2–17:43.2  cuts: 2
+14:05:40  clip_3 31:40.1–32:11.3  cuts: 0
+14:05:41  voices: tiktok=Liam, youtube_shorts=Brian
+14:05:41  copy: clip_1 ...
+14:06:29  copy: clip_1 done, 2 scripts, 64 and 71 words
+<span style="color: #e7e5e1;">14:06:29  copy: clip_2 ...</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

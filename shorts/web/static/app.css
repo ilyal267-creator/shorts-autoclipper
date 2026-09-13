@@ -1,0 +1,91 @@
+/* Direction A, "Studio": design/*.dc.html is the reference for every value here. */
+:root {
+  --bg: #0e0f11;
+  --panel: #131417;
+  --line: #23252a;
+  --line-strong: #2e3035;
+  --raised: #1f2125;
+  --button: #26282d;
+  --text: #e7e5e1;
+  --text-bright: #f1efeb;
+  --soft: #c4c2be;
+  --muted: #9a9ca2;
+  --dim: #7d7f85;
+  --faint: #4b4d52;
+  --accent: #e9b44c;
+  --accent-hover: #f3c96f;
+  --accent-ink: #17130a;
+  --accent-line: #3a3322;
+  --ok: #7cc59a;
+  --ok-line: #23392c;
+  --bad: #e58a8a;
+  --bad-line: #45262a;
+  --tiktok: #5ec4d2;
+  --reels: #d488bd;
+  --shorts: #e0876a;
+  --sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.dim { color: var(--dim); }
+
+/* shell */
+.shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 224px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 28px; padding: 20px 14px;
+  position: sticky; top: 0; height: 100vh;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; color: var(--text); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+.brand:hover { color: var(--text); }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a {
+  display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 7px;
+  color: var(--muted); font-size: 14px;
+}
+.nav a:hover { color: var(--text); background: #18191c; }
+.nav a[aria-current="page"] { background: var(--raised); color: var(--text-bright); font-weight: 500; }
+.me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid var(--line); }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: #2a2c31; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.me-name { font-size: 13px; }
+.me-role { font-size: 12px; color: var(--dim); }
+
+.main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 28px; border-bottom: 1px solid var(--line); }
+.topbar h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.topbar .actions { margin-left: auto; display: flex; gap: 10px; }
+.content { padding: 24px 28px; }
+
+/* controls */
+.btn {
+  height: 36px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--line-strong);
+  background: transparent; color: var(--text); font: inherit; font-size: 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+}
+.btn:hover { background: #18191c; color: var(--text); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
+.btn-lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 8px; }
+.btn:focus-visible, .nav a:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.pill { height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; display: inline-flex; align-items: center; }
+.pill-accent { border-color: var(--accent-line); color: var(--accent); }
+.pill-ok { border-color: var(--ok-line); color: var(--ok); }
+.pill-bad { border-color: var(--bad-line); color: var(--bad); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-tiktok { background: var(--tiktok); }
+.dot-instagram_reels { background: var(--reels); }
+.dot-youtube_shorts { background: var(--shorts); }
+
+.empty { border: 1px dashed var(--line-strong); border-radius: 10px; padding: 48px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 560px; }
+.empty h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.empty p { margin: 0; color: var(--muted); }
