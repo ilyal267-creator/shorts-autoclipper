@@ -22,14 +22,14 @@ account, creds)` publishes one stored draft. Draft rows keep `synthetic_media`, 
 `creds` from env and the token file, so its behaviour is unchanged.
 
 **Acceptance criteria:**
-- [ ] With no env vars set, a publisher given `creds` uses exactly those tokens (checked with a stubbed `requests`)
-- [ ] A mock-provider run reports every stage, in order, to `on_event`
-- [ ] Publishing a stored narrated draft sends `containsSyntheticMedia` to YouTube
+- [x] With no env vars set, a publisher given `creds` uses exactly those tokens (checked with a stubbed `requests`)
+- [x] A mock-provider run reports every stage, in order, to `on_event`
+- [x] Publishing a stored narrated draft sends `containsSyntheticMedia` to YouTube
 
 **Verification:**
-- [ ] `python tests/test_pipeline.py` passes, including the three new checks
-- [ ] `python tests/test_render_e2e.py` passes
-- [ ] `python -m shorts run --config run.json` (mock provider) still writes the same summary shape
+- [x] `python tests/test_pipeline.py` passes (26 checks)
+- [x] `python tests/test_render_e2e.py` passes, now also checking stage order
+- [x] `python -m shorts run --config run.json` (mock provider) still writes the same summary shape
 
 **Dependencies:** None
 
@@ -48,13 +48,13 @@ created on start (users, sessions, connections, runs, clip_versions, scheduled_p
 `python -m shorts.web`.
 
 **Acceptance criteria:**
-- [ ] `python -m shorts.web` serves the Runs page with the sidebar looking like `design/Runs.dc.html` (empty state)
-- [ ] The database file and tables are created on first start and survive a restart
-- [ ] Web dependencies go in a `[web]` extra, so the CLI install stays lean
+- [x] `python -m shorts.web serve` serves the Runs page with the sidebar looking like `design/Runs.dc.html` (empty state)
+- [x] The database is created and migrated on first start and survives a restart (each feature adds its own tables by migration)
+- [x] Web dependencies go in a `[web]` extra, so the CLI install stays lean
 
 **Verification:**
-- [ ] `python tests/test_web.py`: `/health` returns 200, the Runs page renders
-- [ ] Manual: screenshot next to the design's sidebar and header
+- [x] `python tests/test_web.py`: `/health` returns 200, the Runs page renders
+- [x] Manual: checked in the browser against the design's sidebar and header
 
 **Dependencies:** None (can run parallel to T1)
 
@@ -72,13 +72,13 @@ server-side code exchange). Only emails in the `users` table get a session. Adds
 SameSite=Lax cookies. Every page except sign-in and health requires a session. Sign out works.
 
 **Acceptance criteria:**
-- [ ] An invited email lands on Runs after Google sign-in; an uninvited email sees "no invite" and gets no session
-- [ ] Revoking an email ends that tester's sessions on their next request
-- [ ] OAuth `state` is checked; a forged callback is rejected
+- [x] An invited email lands on Runs after Google sign-in; an uninvited email sees "no invite" and gets no session
+- [x] Revoking an email ends that tester's sessions on their next request
+- [x] OAuth `state` is checked; a forged callback is rejected
 
 **Verification:**
-- [ ] `python tests/test_web.py`: invite, session guard, revoke and state mismatch (Google token endpoint stubbed)
-- [ ] Manual: sign in locally with your Google account on `http://localhost`
+- [x] `python tests/test_web.py`: invite, session guard, revoke and state mismatch (Google token endpoint stubbed)
+- [ ] Manual: sign in locally with your Google account on `http://localhost` (waiting on the Web OAuth client)
 
 **Dependencies:** T2
 

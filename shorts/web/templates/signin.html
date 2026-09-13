@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Shorts Autoclipper{% endblock %}
+{% block body %}
+<div class="signin">
+  <div class="signin-card">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e9b44c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 8.5v7l5.5-3.5z"/></svg>
+      <span style="font-size: 17px;">Shorts Autoclipper</span>
+    </div>
+    <div class="signin-intro">
+      <h1>Sign in to the test</h1>
+      <p>One long video in, drafts for TikTok, Reels and Shorts out. Access is by invite while we test.</p>
+    </div>
+    {% if error %}<p class="signin-error" role="alert">{{ error }}</p>{% endif %}
+    <a class="btn btn-google btn-lg" href="/auth/google">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 12h8M12 3a9 9 0 0 0 0 18"/></svg>
+      Continue with Google
+    </a>
+    <p class="signin-small">No invite yet? Ask the person who shared this link. By signing in you agree to the
+      <a href="https://ilyal267-creator.github.io/shorts-autoclipper/terms.html">Terms</a> and
+      <a href="https://ilyal267-creator.github.io/shorts-autoclipper/privacy.html">Privacy Policy</a>.</p>
+  </div>
+</div>
+{% endblock %}

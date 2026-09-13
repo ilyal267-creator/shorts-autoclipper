@@ -89,3 +89,16 @@ a:hover { color: var(--accent-hover); }
 .empty { border: 1px dashed var(--line-strong); border-radius: 10px; padding: 48px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 560px; }
 .empty h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .empty p { margin: 0; color: var(--muted); }
+
+/* sign-in */
+.signin { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.signin-card { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 28px; }
+.signin-intro h1 { margin: 0 0 8px; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.signin-intro p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.btn-google { width: 100%; background: var(--text); border-color: var(--text); color: #121212; font-weight: 500; }
+.btn-google:hover { background: #ffffff; color: #121212; }
+.signin-error { margin: 0; padding: 12px 14px; border: 1px solid var(--bad-line); border-radius: 8px; color: var(--bad); font-size: 14px; }
+.signin-small { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+.signout { margin-left: auto; }
+.signout button { background: none; border: 0; padding: 6px; color: var(--dim); cursor: pointer; border-radius: 6px; display: flex; }
+.signout button:hover { color: var(--text); background: var(--raised); }

@@ -68,9 +68,9 @@ T1 pipeline: per-call credentials + stage events + publish-one-draft
 Full task details (acceptance criteria, verification, files) are in [todo.md](todo.md).
 
 ### Phase 1: Foundation
-- [ ] T1: Pipeline takes credentials and emits stage events
-- [ ] T2: App skeleton with the Direction A layout
-- [ ] T3: Invited testers sign in with Google
+- [x] T1: Pipeline takes credentials and emits stage events
+- [x] T2: App skeleton with the Direction A layout
+- [x] T3: Invited testers sign in with Google
 
 ### Checkpoint 1
 - [ ] CLI tests and render e2e still pass, and web tests pass

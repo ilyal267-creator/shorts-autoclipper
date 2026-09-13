@@ -109,6 +109,20 @@ python -m shorts drain --config run.json                 # post whatever is now 
 SHORTS_DRY_RUN=1 python -m shorts run --config run.json --mode auto_publish
 ```
 
+## Tester dashboard (in progress)
+
+A web app over the same pipeline, for a few invited testers: `tasks/plan.md` has the plan and
+`design/` the approved screens.
+
+```bash
+pip install -e '.[web,whisper]'
+python -m shorts.web invite someone@example.com   # only invited emails can sign in
+python -m shorts.web serve --port 8010
+```
+
+Sign-in needs a Google Cloud OAuth client of type **Web application** with
+`<SHORTS_PUBLIC_URL>/auth/google/callback` as an authorised redirect URI.
+
 ## Without an API key
 
 The run still completes end to end using a deterministic `[MOCK]` provider — segments are
