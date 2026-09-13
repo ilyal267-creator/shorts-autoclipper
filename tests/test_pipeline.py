@@ -622,6 +622,60 @@ def test_narration_is_timed_budgeted_and_mixed_over_the_clip():
     assert plain.count("-i") == 1 and "amix" not in plain[plain.index("-filter_complex") + 1]
 
 
+def test_a_draft_publishes_later_with_the_account_it_is_given():
+    import os
+    import tempfile
+    from unittest import mock
+
+    from shorts import publish as publishing
+    from shorts.run import publish_draft
+
+    sent = []
+
+    class Response:
+        def __init__(self, body=None, headers=None):
+            self.status_code, self.text = 200, "{}"
+            self.headers, self._body = headers or {}, body or {}
+
+        def json(self):
+            return self._body
+
+    class FakeRequests:
+        def post(self, url, **kw):
+            sent.append(("POST", url, kw))
+            return Response(headers={"Location": "https://upload.example/session"})
+
+        def put(self, url, **kw):
+            sent.append(("PUT", url, kw))
+            return Response({"id": "vid123"})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        asset = Path(tmp) / "clip_1_youtube_shorts.mp4"
+        asset.write_bytes(b"\0" * 64)
+        entry = {
+            "status": "draft", "asset_ref": str(asset), "hook": "This is about scope",
+            "title": "Speed is scope", "caption": "edited on the review screen",
+            "hashtags": ["#shorts"], "synthetic_media": True,
+        }
+        clean_env = {k: v for k, v in os.environ.items() if not k.startswith(("YOUTUBE_", "TIKTOK_", "IG_"))}
+        with mock.patch.dict(os.environ, clean_env, clear=True), \
+                mock.patch.object(publishing, "_requests", lambda: FakeRequests()), \
+                mock.patch.object(publishing.time, "sleep", lambda s: None):
+            result = publish_draft(entry, "youtube_shorts", "UC_tester_b", creds={"access_token": "tok-B"})
+            assert result.status == "published" and result.post_id == "vid123", result
+            init = sent[0][2]
+            assert init["headers"]["Authorization"] == "Bearer tok-B"
+            assert init["json"]["status"]["containsSyntheticMedia"] is True
+            assert init["json"]["status"]["privacyStatus"] == "private"
+            assert init["json"]["snippet"]["description"].startswith("edited on the review screen")
+
+            # an unconnected account fails plainly and never falls back to another token
+            sent.clear()
+            refused = publish_draft(entry, "youtube_shorts", "UC_tester_c", creds={})
+            assert refused.status == "failed" and "no youtube account connected" in refused.error
+            assert sent == []
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

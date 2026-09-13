@@ -27,8 +27,15 @@ from .transcribe import transcribe
 
 
 class Run:
-    def __init__(self, cfg: Config):
+    """`on_event(stage, message, data)` hears every log line as it happens; `stage` is set when
+    the run enters a stage (probe, transcribe, plan, copy, compliance, voiceover, render,
+    deliver) and None otherwise. `creds` maps platform -> that account's credentials; None
+    means the CLI's own, read from the environment."""
+
+    def __init__(self, cfg: Config, on_event=None, creds: dict | None = None):
         self.cfg = cfg
+        self.on_event = on_event
+        self.creds = creds
         self.log: list[str] = []
         self.flags: list[str] = list(cfg.flags)
         self.excluded: list[dict] = []
@@ -38,9 +45,11 @@ class Run:
         self.voices: dict[str, str] = {}  # platform -> ElevenLabs voice id, chosen once per run
         self.transcript = None
 
-    def note(self, message: str) -> None:
+    def note(self, message: str, stage: str | None = None, data=None) -> None:
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         self.log.append("[%s] %s" % (stamp, message))
+        if self.on_event:
+            self.on_event(stage, message, data)
 
     # ----------------------------------------------------------------- stages
 
@@ -54,6 +63,7 @@ class Run:
                 "placeholder and must not be published"
             )
 
+        self.note("reading the source", stage="probe")
         probe = media.probe(cfg.source_video)
         self.note(
             "source %dx%d %.1fs, %d audio track(s)%s"
@@ -81,16 +91,26 @@ class Run:
                 % (probe.audio_tracks, cfg.audio_track)
             )
 
+        self.note("transcribing", stage="transcribe")
         transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language, cfg.audio_track)
         self.transcript = transcript
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))
 
+        self.note("choosing clips", stage="plan")
         plan = agent.plan_clips(cfg, transcript, probe.width, probe.height)
         if plan.get("notes"):
             self.note("selection notes: %s" % plan["notes"])
         self.excluded.extend(plan.get("excluded_segments", []))
 
         clips = self._build_clips(plan, transcript)
+        self.note(
+            "%d clip(s) chosen" % len(clips),
+            stage="plan",
+            data=[
+                {"clip_id": c.clip_id, "start": c.start, "end": c.end, "duration": c.duration, "reason": c.selection_reason}
+                for c in clips
+            ],
+        )
         if cfg.reframe_mode:
             self.note("reframe_mode=%s from the config overrides the plan" % cfg.reframe_mode)
         if len(clips) < cfg.clip_count:
@@ -158,6 +178,7 @@ class Run:
         cfg = self.cfg
         words = retime(transcript.words_between(clip.start, clip.end), clip.keeps)
         clip_text = " ".join(w.text for w in words)
+        self.note("%s: writing copy" % clip.clip_id, stage="copy")
 
         sibling_hooks = [
             s.copy.get("tiktok", {}).get("hook", "") for s in siblings if s.copy and s is not clip
@@ -171,6 +192,7 @@ class Run:
             for note in platform_notes(platform, clip.copy.get(platform, {})):
                 self.flags.append("%s: %s" % (clip.clip_id, note))
 
+        self.note("%s: compliance check" % clip.clip_id, stage="compliance")
         verdict = compliance.check(cfg, clip_text, clip.copy, agent.safety_review(cfg, clip_text, clip.copy))
         self.flags.extend("%s: %s" % (clip.clip_id, flag) for flag in verdict.flags)
         if not verdict.ok:
@@ -191,6 +213,7 @@ class Run:
         if cfg.narrated:
             self._narrate(clip, probe)
         else:
+            self.note("%s: rendering" % clip.clip_id, stage="render")
             clip.asset_ref = rendering.render(clip, cfg, probe.width, probe.height, probe.hdr)
             self.note("%s rendered %.1fs -> %s" % (clip.clip_id, clip.duration, clip.asset_ref))
 
@@ -225,6 +248,7 @@ class Run:
                 self.flags.append("%s: no narration written for %s" % (clip.clip_id, platform))
                 continue
             narration = assets_dir / ("%s_%s_voice.mp3" % (clip.clip_id, platform))
+            self.note("%s: recording the %s voiceover" % (clip.clip_id, platform), stage="voiceover")
             words = voice.synthesize(script, self.voices[platform], narration, model)
             spoken = words[-1].end if words else 0.0
             if spoken > clip.duration + 0.3:
@@ -234,6 +258,7 @@ class Run:
                 )
             emphasis = (clip.copy.get(platform) or {}).get("emphasis_words", [])
             captions = subtitle_lines(words, emphasis, clip_end=clip.duration)
+            self.note("%s: rendering for %s" % (clip.clip_id, platform), stage="render")
             clip.assets[platform] = rendering.render(
                 clip,
                 cfg,
@@ -254,6 +279,7 @@ class Run:
         cfg = self.cfg
         out: dict = {}
         dry_run = os.getenv("SHORTS_DRY_RUN") == "1"
+        self.note("%s: delivering (%s)" % (clip.clip_id, cfg.posting_mode), stage="deliver")
 
         for account in cfg.connected_accounts:
             platform, account_id = account["platform"], account["account_id"]
@@ -295,7 +321,9 @@ class Run:
                 }
                 continue
 
-            result = publishing.publish(platform, account_id, asset, meta, dry_run=dry_run)
+            result = publishing.publish(
+                platform, account_id, asset, meta, dry_run=dry_run, creds=self._creds(platform)
+            )
             out[platform] = {
                 "status": result.status,
                 "post_id": result.post_id,
@@ -306,6 +334,9 @@ class Run:
             if result.status == "failed":
                 self.note("%s -> %s failed: %s" % (clip.clip_id, platform, result.error))
         return out
+
+    def _creds(self, platform: str) -> dict | None:
+        return None if self.creds is None else self.creds.get(platform, {})
 
     def _clip_row(self, clip: Clip, platforms: dict) -> dict:
         return {
@@ -343,15 +374,18 @@ def transcript_words(clip: Clip, transcript) -> list:
 
 def _text_fields(meta: dict) -> dict:
     return {
+        "hook": meta.get("hook") or None,
         "title": meta.get("title") or None,
         "caption": meta.get("caption"),
         "hashtags": meta.get("hashtags", []),
+        # kept on the draft so a later publish still declares the AI voice
+        "synthetic_media": bool(meta.get("synthetic_media")),
         **({"voiceover": meta["voiceover"]} if meta.get("voiceover") else {}),
     }
 
 
-def execute(cfg: Config) -> dict:
-    run = Run(cfg)
+def execute(cfg: Config, on_event=None, creds: dict | None = None) -> dict:
+    run = Run(cfg, on_event, creds)
     try:
         summary = run.execute()
     except compliance.HaltRun as exc:
@@ -373,14 +407,43 @@ def execute(cfg: Config) -> dict:
     return summary
 
 
-def drain_queue(cfg: Config) -> list[dict]:
+def publish_draft(
+    entry: dict,
+    platform: str,
+    account_id: str,
+    creds: dict | None = None,
+    dry_run: bool = False,
+    public_asset_base_url: str | None = None,
+) -> publishing.Result:
+    """Publish one draft from a summary (`clip["platforms"][platform]`), as it reads now.
+
+    The review screen edits title, caption and hashtags in place; whatever the entry holds is
+    what posts. The narration and burned captions are already in the render.
+    """
+    meta = {
+        "hook": entry.get("hook"),
+        "title": entry.get("title"),
+        "caption": entry.get("caption"),
+        "hashtags": entry.get("hashtags") or [],
+        "synthetic_media": bool(entry.get("synthetic_media")),
+        "public_asset_base_url": public_asset_base_url,
+    }
+    return publishing.publish(platform, account_id, entry.get("asset_ref"), meta, dry_run, creds)
+
+
+def drain_queue(cfg: Config, creds: dict | None = None) -> list[dict]:
     """Post everything whose scheduled time has arrived."""
     queue = Queue(Path(cfg.output_dir) / "queue.json")
     dry_run = os.getenv("SHORTS_DRY_RUN") == "1"
     done = []
     for row in queue.due(datetime.now(timezone.utc)):
         result = publishing.publish(
-            row["platform"], row["account_id"], row["asset_ref"], row["metadata"], dry_run=dry_run
+            row["platform"],
+            row["account_id"],
+            row["asset_ref"],
+            row["metadata"],
+            dry_run=dry_run,
+            creds=None if creds is None else creds.get(row["platform"], {}),
         )
         queue.mark(row["queued_id"], result.status, result.error or result.post_id)
         done.append({**row, "status": result.status, "post_id": result.post_id, "error": result.error})

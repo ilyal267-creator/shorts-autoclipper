@@ -1,7 +1,8 @@
 """§4.7 Publish. One function per platform, all behind `publish()`.
 
-Credentials come from the environment; a missing one is reported as a skip, never as a
-success. Nothing here is called unless a render returned an asset reference (§6).
+Each publisher is handed the credentials for the account it posts to. The CLI builds them from
+the environment (`env_creds`); the web app passes each tester's own. A missing one is a failure,
+never a success. Nothing here is called unless a render returned an asset reference (§6).
 """
 
 from __future__ import annotations
@@ -48,12 +49,12 @@ def _env(name: str) -> str:
 # --------------------------------------------------------------------------- TikTok
 
 
-def tiktok(asset: str, meta: dict, account_id: str) -> Result:
+def tiktok(asset: str, meta: dict, account_id: str, creds: dict) -> Result:
     requests = _requests()
-    token = _env("TIKTOK_ACCESS_TOKEN")
+    token = _token(creds, "tiktok")
     size = Path(asset).stat().st_size
     # Unaudited apps may only post privately; override once the app is approved.
-    privacy = os.getenv("TIKTOK_PRIVACY_LEVEL", "SELF_ONLY")
+    privacy = creds.get("privacy_level") or "SELF_ONLY"
 
     init = requests.post(
         "https://open.tiktokapis.com/v2/post/publish/video/init/",
@@ -107,9 +108,9 @@ def tiktok(asset: str, meta: dict, account_id: str) -> Result:
 # --------------------------------------------------------------------------- Instagram Reels
 
 
-def instagram_reels(asset: str, meta: dict, account_id: str) -> Result:
+def instagram_reels(asset: str, meta: dict, account_id: str, creds: dict) -> Result:
     requests = _requests()
-    token = _env("IG_ACCESS_TOKEN")
+    token = _token(creds, "instagram")
     base_url = meta.get("public_asset_base_url")
     if not base_url:
         raise PublishError(
@@ -159,12 +160,9 @@ def instagram_reels(asset: str, meta: dict, account_id: str) -> Result:
 # --------------------------------------------------------------------------- YouTube Shorts
 
 
-def youtube_shorts(asset: str, meta: dict, account_id: str) -> Result:
+def youtube_shorts(asset: str, meta: dict, account_id: str, creds: dict) -> Result:
     requests = _requests()
-    try:
-        token = auth.youtube_access_token()  # refreshed from the stored sign-in
-    except auth.AuthError as exc:
-        raise PublishError(str(exc)) from exc
+    token = _token(creds, "youtube")
     size = Path(asset).stat().st_size
     content_type = mimetypes.guess_type(asset)[0] or "video/mp4"
     description = "\n\n".join(
@@ -187,7 +185,7 @@ def youtube_shorts(asset: str, meta: dict, account_id: str) -> Result:
                 "tags": [tag.lstrip("#") for tag in meta.get("hashtags", [])][:15],
             },
             "status": {
-                "privacyStatus": os.getenv("YOUTUBE_PRIVACY_STATUS", "private"),
+                "privacyStatus": creds.get("privacy_status") or "private",
                 "selfDeclaredMadeForKids": False,
                 # YouTube's altered-or-synthetic disclosure: set when an AI voice narrates.
                 **({"containsSyntheticMedia": True} if meta.get("synthetic_media") else {}),
@@ -220,6 +218,27 @@ PUBLISHERS = {
 }
 
 
+def env_creds(platform: str) -> dict:
+    """The CLI's credentials: one account per platform, from the environment and .secrets/."""
+    if platform == "tiktok":
+        return {"access_token": _env("TIKTOK_ACCESS_TOKEN"), "privacy_level": os.getenv("TIKTOK_PRIVACY_LEVEL")}
+    if platform == "instagram_reels":
+        return {"access_token": _env("IG_ACCESS_TOKEN")}
+    if platform == "youtube_shorts":
+        try:
+            token = auth.youtube_access_token()  # refreshed from the stored sign-in
+        except auth.AuthError as exc:
+            raise PublishError(str(exc)) from exc
+        return {"access_token": token, "privacy_status": os.getenv("YOUTUBE_PRIVACY_STATUS")}
+    return {}
+
+
+def _token(creds: dict, name: str) -> str:
+    if not creds.get("access_token"):
+        raise PublishError("no %s account connected" % name)
+    return creds["access_token"]
+
+
 def _caption_with_tags(meta: dict) -> str:
     tags = " ".join(meta.get("hashtags", []))
     caption = meta.get("caption", "")
@@ -231,8 +250,18 @@ def _raise_for(response, what: str) -> None:
         raise PublishError("%s failed (%d): %s" % (what, response.status_code, response.text[:300]))
 
 
-def publish(platform: str, account_id: str, asset: str, meta: dict, dry_run: bool = False) -> Result:
-    """One (clip, platform) attempt with the spec's single retry (§4.7)."""
+def publish(
+    platform: str,
+    account_id: str,
+    asset: str,
+    meta: dict,
+    dry_run: bool = False,
+    creds: dict | None = None,
+) -> Result:
+    """One (clip, platform) attempt with the spec's single retry (§4.7).
+
+    `creds` is the account's credentials; None means the CLI's, read from the environment.
+    """
     if not asset:
         raise PublishError("refusing to publish %s without a rendered asset" % platform)
     if platform not in PUBLISHERS:
@@ -243,7 +272,8 @@ def publish(platform: str, account_id: str, asset: str, meta: dict, dry_run: boo
     last_error = None
     for attempt in range(2):
         try:
-            return PUBLISHERS[platform](asset, meta, account_id)
+            account_creds = env_creds(platform) if creds is None else creds
+            return PUBLISHERS[platform](asset, meta, account_id, account_creds)
         except PublishError as exc:
             last_error = str(exc)
             if attempt == 0:

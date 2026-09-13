@@ -96,7 +96,8 @@ def test_render_end_to_end():
                 "output_dir": str(work / "out"),
             }
         )
-        summary = run_mod.execute(cfg)
+        events = []
+        summary = run_mod.execute(cfg, on_event=lambda stage, message, data: events.append((stage, data)))
 
         assert "error" not in summary, summary.get("error")
         assert len(summary["clips"]) == 2, summary["clips"]
@@ -113,6 +114,14 @@ def test_render_end_to_end():
 
             # draft_for_approval must not have called a publisher (§4.7)
             assert {state["status"] for state in clip["platforms"].values()} == {"draft"}
+
+        # the progress screen follows these: every stage, in order, and the chosen clips once known
+        stages = [stage for stage, _ in events if stage]
+        entered = [s for i, s in enumerate(stages) if i == 0 or s != stages[i - 1]]
+        per_clip = ["copy", "compliance", "render", "deliver"]
+        assert entered == ["probe", "transcribe", "plan"] + per_clip * 2, entered
+        chosen = [data for stage, data in events if stage == "plan" and data]
+        assert [c["clip_id"] for c in chosen[0]] == ["clip_1", "clip_2"], chosen
 
         assert any("MOCK" in flag for flag in summary["flags_for_human_review"])
         assert (Path(cfg.output_dir) / "summary.json").exists()
