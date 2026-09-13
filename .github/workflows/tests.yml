@@ -21,6 +21,17 @@ jobs:
       # ffmpeg are imported lazily, inside the functions that need them.
       - run: python tests/test_pipeline.py
 
+  web:
+    # The tester dashboard, through FastAPI's test client. No network, no browser.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[web]'
+      - run: python tests/test_web.py
+
   render:
     # Cuts, crops and burns captions for real, then inspects the output — the
     # half of the pipeline the unit checks can only describe.
