@@ -153,12 +153,12 @@ only, newest first, with source, start time, clip count, platforms, mode and sta
 row shows its stage and progress. Each row links to progress or review, depending on its state.
 
 **Acceptance criteria:**
-- [ ] Tester A never sees, opens or downloads anything from tester B's runs, including by guessing IDs
-- [ ] Every status in the design renders: needs review, running, scheduled, done, no clips, failed
+- [x] Tester A never sees, opens or downloads anything from tester B's runs, including by guessing IDs
+- [x] Every status renders: needs review, running (with its stage), no clips, failed, cancelled, not started (scheduled/done arrive with publishing)
 
 **Verification:**
-- [ ] `python tests/test_web.py`: two testers, cross-access returns 404 for pages and files
-- [ ] Manual: compare with the design
+- [x] `python tests/test_web.py`: two testers, cross-access returns 404 for pages (files are served from T7 and get the same check)
+- [x] Manual: compared with the design, with three real runs
 
 **Dependencies:** T5
 

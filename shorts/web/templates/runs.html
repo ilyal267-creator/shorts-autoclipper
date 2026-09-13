@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Runs · Shorts Autoclipper{% endblock %}
 {% block main %}
+{% if active %}<meta http-equiv="refresh" content="10">{% endif %}
 <header class="topbar">
   <h1>Runs</h1>
   <div class="actions">
@@ -15,6 +16,55 @@
     <p>Upload a long video and get a draft of each clip for TikTok, Reels and Shorts to review.</p>
     <a class="btn btn-primary" href="/runs/new">Start your first run</a>
   </div>
+  {% else %}
+  <div class="table-scroll">
+    <table class="runs-table">
+      <thead>
+        <tr><th>Source video</th><th>Started</th><th>Clips</th><th>Platforms</th><th>Mode</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr class="{% if r.status == 'running' %}is-running{% endif %}">
+          <td>
+            <a class="run-link" href="{{ r.href }}">{{ r.name }}</a>
+            <div class="mono dim small">{{ r.facts }}</div>
+          </td>
+          <td class="soft"><time datetime="{{ r.started }}">{{ r.started[:16].replace("T", " ") }} UTC</time></td>
+          <td class="mono">{{ r.clips if r.clips is not none else "—" }}</td>
+          <td>
+            <span class="platforms">
+              {% for key, name in r.platforms %}<span class="dot dot-{{ key }}" title="{{ name }}"></span>{% endfor %}
+              <span class="muted small">{{ r.platforms[0][1] if r.platforms|length == 1 else "%d platforms"|format(r.platforms|length) if r.platforms else "—" }}</span>
+            </span>
+          </td>
+          <td class="soft">{{ r.mode }}</td>
+          <td>
+            {% if r.share is not none %}
+            <div class="run-stage">
+              <span class="small soft">{{ r.label }}</span>
+              <span class="bar bar-thin"><span class="bar-fill" style="width: {{ r.share }}%"></span></span>
+            </div>
+            {% else %}
+            <span class="pill {% if r.tone %}pill-{{ r.tone }}{% endif %}">{{ r.label }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 </div>
+<script>
+  // Show start times in the tester's own time zone: "Today, 15:20" or "12 Sep, 18:45".
+  (function () {
+    const today = new Date().toDateString();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      const at = new Date(el.getAttribute("datetime"));
+      if (isNaN(at)) return;
+      const clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      el.textContent = (at.toDateString() === today ? "Today" : at.toLocaleDateString([], { day: "numeric", month: "short" })) + ", " + clock;
+    });
+  })();
+</script>
 {% endblock %}

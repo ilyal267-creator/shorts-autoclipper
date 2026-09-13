@@ -123,7 +123,9 @@ def create_app(data: Path | None = None) -> FastAPI:
 
     @app.get("/runs")
     def runs(request: Request):
-        return page(request, "runs.html", nav="runs", runs=[])
+        listed = runs_pages.list_runs(app.state.db_path, request.state.user["id"])
+        active = any(r["status"] in ("queued", "running") for r in listed)
+        return page(request, "runs.html", nav="runs", runs=listed, active=active)
 
     runs_pages.register(app, page)
 

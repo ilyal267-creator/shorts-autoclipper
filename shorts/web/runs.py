@@ -81,6 +81,60 @@ def size_text(size: int) -> str:
     return "%d B" % size
 
 
+STATUS_PILLS = {
+    "uploaded": ("Not started", ""),
+    "queued": ("Waiting to start", ""),
+    "needs_review": ("Needs review", "accent"),
+    "no_clips": ("No clips", "bad"),
+    "failed": ("Failed", "bad"),
+    "cancelled": ("Cancelled", ""),
+}
+
+
+def list_runs(db_path, user_id: int) -> list[dict]:
+    conn = db.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", (user_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    out = []
+    for run in rows:
+        probe = json.loads(run["probe_json"])
+        raw = json.loads(run["config_json"] or "{}")
+        summary = json.loads(run["summary_json"] or "{}")
+        tracks = sum(1 for c in probe.get("audio_codecs", []) if c != "none")
+        facts = [duration_text(probe.get("duration", 0)), "%s×%s" % (probe.get("width"), probe.get("height"))]
+        if probe.get("hdr"):
+            facts.append("HDR")
+        if tracks > 1:
+            facts.append("%d audio tracks" % tracks)
+        platforms = [a["platform"] for a in raw.get("connected_accounts", [])]
+        label, tone = STATUS_PILLS.get(run["status"], (run["status"], ""))
+        stage_share = None
+        if run["status"] == "running":
+            keys = [k for k, _ in STAGE_LABELS if raw.get("voiceover", {}).get("enabled") or k != "voiceover"]
+            label = dict(STAGE_LABELS).get(run["stage"], "Starting")
+            stage_share = int(100 * (keys.index(run["stage"]) + 0.5) / len(keys)) if run["stage"] in keys else 3
+        out.append({
+            "id": run["id"],
+            "href": "/runs/%s/setup" % run["id"] if run["status"] == "uploaded" else "/runs/%s" % run["id"],
+            "name": run["source_name"],
+            "facts": " · ".join(facts),
+            "started": (run["queued_at"] or run["created_at"]).replace(" ", "T") + "Z",
+            "clips": len(summary.get("clips", [])) if run["status"] in ("needs_review", "no_clips") else None,
+            "platforms": [(p, PLATFORM_NAMES[p]) for p in platforms if p in PLATFORM_NAMES],
+            "mode": "Draft for approval" if raw else "—",
+            "status": run["status"],
+            "label": label,
+            "tone": tone,
+            "share": stage_share,
+        })
+    return out
+
+
 def register(app, page) -> None:
     @app.get("/runs/new")
     def new_run(request: Request):

@@ -350,6 +350,51 @@ def test_cancel_and_a_dead_worker_both_end_a_run_with_the_reason():
         assert "restarted" in client.get("/runs/%s" % crashed).text
 
 
+def test_the_runs_list_shows_only_your_own_runs_in_every_state():
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        other, _ = app_client(tmp)
+        auth.invite(db_path, "other@example.com")
+        sign_in(other, "other@example.com")
+
+        conn = db.connect(db_path)
+        me = conn.execute("SELECT id FROM users WHERE email = 'tester@example.com'").fetchone()[0]
+        them = conn.execute("SELECT id FROM users WHERE email = 'other@example.com'").fetchone()[0]
+        probe = json.dumps({"duration": 2527, "width": 3840, "height": 2160, "hdr": True, "audio_codecs": ["aac", "aac"]})
+        config = json.dumps({"connected_accounts": [{"platform": "tiktok"}, {"platform": "youtube_shorts"}], "voiceover": {}})
+        summary = json.dumps({"clips": [{}, {}, {}]})
+        rows = [
+            ("r_review", me, "needs_review", "Review me.mp4", summary, None),
+            ("r_running", me, "running", "Running.mp4", None, "copy"),
+            ("r_none", me, "no_clips", "Silent.mp4", json.dumps({"clips": []}), None),
+            ("r_failed", me, "failed", "Broken.mp4", None, "transcribe"),
+            ("r_cancel", me, "cancelled", "Stopped.mp4", None, None),
+            ("r_setup", me, "uploaded", "Unfinished.mp4", None, None),
+            ("r_theirs", them, "needs_review", "Someone else's secret.mp4", summary, None),
+        ]
+        with conn:
+            for run_id, user_id, status, name, summ, stage in rows:
+                conn.execute(
+                    """INSERT INTO runs (id, user_id, status, source_name, source_path, source_bytes, probe_json, config_json, summary_json, stage, queued_at)
+                       VALUES (?, ?, ?, ?, '/x/source.mp4', 1, ?, ?, ?, ?, CASE WHEN ? = 'uploaded' THEN NULL ELSE datetime('now') END)""",
+                    (run_id, user_id, status, name, probe, None if status == "uploaded" else config, summ, stage, status),
+                )
+        conn.close()
+
+        page = client.get("/runs").text
+        for label in ("Needs review", "Write hooks, captions and narration", "No clips", "Failed", "Cancelled", "Not started"):
+            assert label in page, label
+        assert "Someone else" not in page and "r_theirs" not in page
+        assert "42:07 · 3840×2160 · HDR · 2 audio tracks" in page
+        assert 'href="/runs/r_setup/setup"' in page and 'href="/runs/r_review"' in page
+        assert 'http-equiv="refresh"' in page  # a run is going, so the list keeps itself current
+
+        # guessing someone else's run id gets the same answer as a run that doesn't exist
+        for path in ("/runs/r_theirs", "/api/runs/r_theirs/progress", "/runs/r_theirs/setup", "/runs/nope"):
+            assert client.get(path, follow_redirects=False).status_code == 404, path
+        assert "Someone else" in other.get("/runs").text
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"
