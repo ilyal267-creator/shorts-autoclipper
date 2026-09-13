@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}New run · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar"><h1>New run</h1></header>
+<form class="setup" method="post" action="/runs/{{ run.id }}/start">
+  <div class="setup-form">
+    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+
+    <div class="field-row">
+      <div class="field">
+        <label class="label" for="clip_count">Clips</label>
+        <select class="input" id="clip_count" name="clip_count">
+          {% for n in range(1, 6) %}<option value="{{ n }}" {% if n == 3 %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <fieldset class="field grow">
+        <legend class="label">Framing</legend>
+        <div class="segmented">
+          <label><input type="radio" name="framing" value="auto" checked><span>Planner decides</span></label>
+          <label><input type="radio" name="framing" value="center_crop"><span>Crop to 9:16</span></label>
+          <label><input type="radio" name="framing" value="fit"><span>Fit whole frame</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <fieldset class="field">
+      <legend class="label">Platforms</legend>
+      <div class="choice-grid">
+        {% for key, name, voice in platforms %}
+        <label class="choice">
+          <input type="checkbox" name="platforms" value="{{ key }}" checked>
+          <span class="choice-body">
+            <span class="choice-title"><span class="dot dot-{{ key }}"></span>{{ name }}</span>
+            <span class="choice-note">Drafts only until you connect it</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend class="label">AI voiceover</legend>
+      <label class="toggle-row">
+        <input type="checkbox" name="voiceover" class="switch">
+        <span>A new script per platform, read over the clip, with the original sound kept underneath.
+          Voices: {% for key, name, voice in platforms %}{{ voice }} on {{ name }}{% if not loop.last %}, {% endif %}{% endfor %}.</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend class="label">When clips are ready</legend>
+      <div class="choice-grid">
+        <label class="choice">
+          <input type="radio" name="mode" value="draft" checked>
+          <span class="choice-body"><span class="choice-title">Save drafts</span><span class="choice-note">Nothing posts until you approve it</span></span>
+        </label>
+        <label class="choice is-disabled" title="Connect an account first">
+          <input type="radio" name="mode" value="schedule" disabled>
+          <span class="choice-body"><span class="choice-title">Schedule</span><span class="choice-note">After you connect an account</span></span>
+        </label>
+        <label class="choice is-disabled" title="Connect an account first">
+          <input type="radio" name="mode" value="publish" disabled>
+          <span class="choice-body"><span class="choice-title">Publish</span><span class="choice-note">After you connect an account</span></span>
+        </label>
+      </div>
+    </fieldset>
+
+    <label class="check-row">
+      <input type="checkbox" name="rights" value="yes" required>
+      <span>I own this video, or have permission to cut and post it, including any music in it.</span>
+    </label>
+
+    <div class="submit-row">
+      <button class="btn btn-primary btn-lg" type="submit">Start run</button>
+      <span class="dim">{{ runs_left }} of your runs left today.</span>
+    </div>
+  </div>
+
+  <aside class="setup-source">
+    <div class="label">Source video</div>
+    <div class="source-card">
+      <div class="source-name">{{ run.source_name }}</div>
+      <dl class="facts">
+        <dt>Length</dt><dd class="mono">{{ duration }}</dd>
+        <dt>Picture</dt><dd class="mono">{{ probe.width }}×{{ probe.height }}{% if probe.height > probe.width %} · vertical{% endif %}</dd>
+        <dt>Size</dt><dd class="mono">{{ size }}</dd>
+        <dt>Colour</dt><dd>{% if probe.hdr %}HDR, converted to SDR{% else %}SDR{% endif %}</dd>
+      </dl>
+      {% if tracks|length > 1 %}
+      <div class="field source-tracks">
+        <label class="label" for="audio_track">This file has {{ tracks|length }} audio tracks. Which one has the speech?</label>
+        <select class="input" id="audio_track" name="audio_track">
+          {% for t in tracks %}
+          <option value="{{ t.index }}" {% if not t.readable %}disabled{% endif %} {% if t.index == readable_tracks[0].index %}selected{% endif %}>
+            Track {{ t.index + 1 }} · {{ t.codec if t.readable else "can't be read" }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" name="audio_track" value="{{ readable_tracks[0].index }}">
+      {% endif %}
+    </div>
+  </aside>
+</form>
+{% endblock %}

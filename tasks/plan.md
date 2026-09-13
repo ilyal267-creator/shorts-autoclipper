@@ -77,7 +77,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [ ] An invited Google account reaches an empty Runs page; an uninvited one is refused
 
 ### Phase 2: The run loop
-- [ ] T4: New run: upload, probe, settings
+- [x] T4: New run: upload, probe, settings
 - [ ] T5: Worker runs it; progress screen follows it
 - [ ] T6: Runs list
 - [ ] T7: Review clips: watch, approve, edit copy

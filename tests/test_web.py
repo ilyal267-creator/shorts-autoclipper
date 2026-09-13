@@ -113,6 +113,133 @@ def test_revoking_ends_sessions_and_a_forged_callback_is_refused():
         conn.close()
 
 
+def signed_in(tmp: str, email: str = "tester@example.com") -> tuple[TestClient, Path]:
+    client, db_path = app_client(tmp)
+    auth.invite(db_path, email)
+    assert sign_in(client, email).headers["location"] == "/runs"
+    return client, db_path
+
+
+def make_video(path: Path, seconds: int = 4, audio_tracks: int = 2) -> None:
+    import subprocess
+
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+           "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25:duration=%d" % seconds]
+    for i in range(audio_tracks):
+        cmd += ["-f", "lavfi", "-i", "sine=frequency=%d:duration=%d" % (300 + 200 * i, seconds)]
+    cmd += ["-map", "0:v"] + sum((["-map", "%d:a" % (i + 1)] for i in range(audio_tracks)), [])
+    cmd += ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path)]
+    subprocess.run(cmd, check=True)
+
+
+def upload(client: TestClient, path: Path, name: str = "talk.mp4"):
+    return client.post(
+        "/api/uploads", content=path.read_bytes(),
+        headers={"X-Filename": urllib.parse.quote(name), "Content-Type": "application/octet-stream"},
+    )
+
+
+def start_form(**changes) -> dict:
+    form = {"clip_count": "2", "framing": "fit", "platforms": ["tiktok", "youtube_shorts"],
+            "audio_track": "0", "rights": "yes"}
+    form.update(changes)
+    return {k: v for k, v in form.items() if v is not None}
+
+
+def test_a_new_run_is_uploaded_checked_and_queued_with_its_settings():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import config as config_mod
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        video = Path(tmp) / "in.mp4"
+        make_video(video, audio_tracks=2)
+
+        sent = upload(client, video, name="Ep 12 (final).mp4")
+        assert sent.status_code == 200, sent.text
+        run_id = sent.json()["run_id"]
+        setup = client.get(sent.json()["next"])
+        assert setup.status_code == 200
+        assert "Ep 12 (final).mp4" in setup.text and "640×360" in setup.text
+        assert "This file has 2 audio tracks" in setup.text and "Track 2 · aac" in setup.text
+
+        # the rights box is enforced by the server, not only by the browser
+        refused = client.post("/runs/%s/start" % run_id, data=start_form(rights=None), follow_redirects=False)
+        assert refused.headers["location"].endswith("error=rights")
+        assert "Confirm you have the rights" in client.get(refused.headers["location"]).text
+        bad_track = client.post("/runs/%s/start" % run_id, data=start_form(audio_track="7"), follow_redirects=False)
+        assert bad_track.headers["location"].endswith("error=track")
+
+        started = client.post("/runs/%s/start" % run_id, data=start_form(audio_track="1"), follow_redirects=False)
+        assert started.status_code == 303 and "error" not in started.headers["location"]
+        conn = db.connect(db_path)
+        row = conn.execute("SELECT status, config_json FROM runs WHERE id = ?", (run_id,)).fetchone()
+        conn.close()
+        assert row["status"] == "queued"
+        raw = json.loads(row["config_json"])
+        assert raw["audio_track"] == 1 and raw["reframe_mode"] == "fit" and raw["clip_count"] == 2
+        cfg = config_mod.from_dict(raw)
+        assert [a["platform"] for a in cfg.connected_accounts] == ["tiktok", "youtube_shorts"]
+        assert cfg.posting_mode == "draft_for_approval" and cfg.rights_confirmed
+        assert all("rights" not in flag and "posting_mode" not in flag for flag in cfg.flags), cfg.flags
+
+        # a started run can't be started again, and another tester can't see it at all
+        again = client.post("/runs/%s/start" % run_id, data=start_form(), follow_redirects=False)
+        assert again.status_code == 409
+        other, _ = app_client(tmp)
+        auth.invite(db_path, "other@example.com")
+        sign_in(other, "other@example.com")
+        assert other.get("/runs/%s/setup" % run_id).status_code == 404
+
+
+def test_uploads_over_the_limits_or_unreadable_are_refused_and_leave_nothing():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        runs_dir = Path(tmp) / "runs"
+        video = Path(tmp) / "in.mp4"
+        make_video(video, seconds=4, audio_tracks=1)
+
+        junk = Path(tmp) / "notes.mp4"
+        junk.write_bytes(b"this is not a video" * 100)
+        unreadable = upload(client, junk)
+        assert unreadable.status_code == 422 and "couldn't be read" in unreadable.json()["error"]
+
+        with mock.patch.dict(os.environ, {"SHORTS_MAX_UPLOAD_BYTES": "1000"}):
+            big = upload(client, video)
+        assert big.status_code == 413
+
+        with mock.patch.dict(os.environ, {"SHORTS_MAX_SOURCE_MINUTES": "0.02"}):  # 1.2 seconds
+            long = upload(client, video)
+        assert long.status_code == 422 and "minutes" in long.json()["error"]
+
+        assert not runs_dir.exists() or not any(runs_dir.iterdir())
+        conn = db.connect(db_path)
+        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+        conn.close()
+
+        # the daily cap counts started runs, and is enforced when starting
+        with mock.patch.dict(os.environ, {"SHORTS_RUNS_PER_DAY": "1"}):
+            first = upload(client, video).json()["run_id"]
+            second = upload(client, video).json()["run_id"]
+            ok = client.post("/runs/%s/start" % first, data=start_form(audio_track="0"), follow_redirects=False)
+            assert "error" not in ok.headers["location"]
+            capped = client.post("/runs/%s/start" % second, data=start_form(audio_track="0"), follow_redirects=False)
+            assert capped.headers["location"].endswith("error=cap")
+            assert "used today's runs" in client.get("/runs/new").text
+
+        stranger = TestClient(client.app)
+        assert stranger.post("/api/uploads", content=b"x").status_code == 401
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

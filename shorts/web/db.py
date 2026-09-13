@@ -28,6 +28,28 @@ MIGRATIONS = [
         expires_at TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE runs (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        -- uploaded -> queued -> running -> needs_review | failed | cancelled
+        status TEXT NOT NULL,
+        source_name TEXT NOT NULL,
+        source_path TEXT NOT NULL,
+        source_bytes INTEGER NOT NULL,
+        probe_json TEXT NOT NULL,
+        config_json TEXT,
+        summary_json TEXT,
+        stage TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        queued_at TEXT,
+        started_at TEXT,
+        finished_at TEXT
+    );
+    CREATE INDEX runs_by_user ON runs (user_id, created_at);
+    CREATE INDEX runs_by_status ON runs (status, queued_at);
+    """,
 ]
 
 

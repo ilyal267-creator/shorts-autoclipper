@@ -105,13 +105,13 @@ posting mode. Start run validates on the server and stores a queued run whose co
 `config.from_dict`.
 
 **Acceptance criteria:**
-- [ ] A 2-track file shows the track picker, and the chosen track is saved into the run's config
-- [ ] Start run is refused server-side without the rights box, over the size cap (4 GB), over the tester's daily run cap, or for an unreadable file
-- [ ] The saved config loads with `config.from_dict` without flags beyond the pipeline's normal defaults
+- [x] A 2-track file shows the track picker, and the chosen track is saved into the run's config
+- [x] Start run is refused server-side without the rights box, over the size cap (4 GB), over the tester's daily run cap, or for an unreadable file
+- [x] The saved config loads with `config.from_dict` without flags beyond the pipeline's normal defaults
 
 **Verification:**
-- [ ] `python tests/test_web.py`: upload a generated 10-second clip, probe values shown, refusal cases
-- [ ] Manual: upload the iPhone `.mov` from earlier and see rotation, HDR and tracks reported correctly
+- [x] `python tests/test_web.py`: upload a generated clip, probe values shown, refusal cases
+- [x] Manual: a generated 2-track 1080p file uploaded, track 2 chosen in the browser, run queued with those settings (the iPhone `.mov` is no longer on disk; rotation/HDR probing is covered by test_pipeline)
 
 **Dependencies:** T1, T3
 
