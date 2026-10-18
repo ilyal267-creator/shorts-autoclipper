@@ -910,6 +910,120 @@ def test_a_video_with_no_speech_is_clipped_from_the_picture():
         assert any("choosing from" in line and "frames" in line for line in summary["log"]), summary["log"]
 
 
+def test_the_generator_is_mocked_by_default_and_costed_before_it_spends():
+    import shutil
+    import tempfile
+    from unittest import mock
+
+    from shorts import higgsfield
+
+    # the estimate is linear in seconds and rises with resolution
+    assert higgsfield.estimate(10, "480p") < higgsfield.estimate(10, "720p") < higgsfield.estimate(10, "1080p")
+    assert higgsfield.estimate(6, "1080p") == round(higgsfield.rate_for("1080p") * 6, 4)
+    assert higgsfield.estimate(6, "1080p", shots=3) == higgsfield.estimate(18, "1080p")
+    with mock.patch.dict(os.environ, {"SHORTS_HF_RATE_1080P": "0.5"}):
+        assert higgsfield.estimate(2, "1080p") == 1.0  # the operator can correct the guess
+
+    # the ceiling refuses before anything is asked for, and says what it would have cost
+    assert higgsfield.affordable(0.0, 1.0, ceiling=5.0) is None
+    refused = higgsfield.affordable(4.80, 1.0, ceiling=5.0)
+    assert refused and "$1.00" in refused and "$4.80" in refused
+    assert higgsfield.affordable(99.0, 0.0, ceiling=5.0) is None  # nothing asked, nothing refused
+
+    # a key alone does not start the spending: it takes a deliberate switch
+    with mock.patch.object(higgsfield, "credentials", lambda: {"key_id": "a", "key_secret": "b"}):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SHORTS_GENERATOR", None)
+            assert higgsfield.provider() == "mock"
+        with mock.patch.dict(os.environ, {"SHORTS_GENERATOR": "real"}):
+            assert higgsfield.provider() == "higgsfield"
+    with mock.patch.object(higgsfield, "credentials", lambda: None), \
+            mock.patch.dict(os.environ, {"SHORTS_GENERATOR": "real"}):
+        assert higgsfield.provider() == "mock"  # asked for real, has no key: still spends nothing
+
+    # tier 0 generates nothing at all, and says so rather than quietly costing money
+    try:
+        higgsfield.make_shot("a shot", Path("unused.mp4"), tier=0)
+        raise AssertionError("tier 0 should refuse to generate")
+    except higgsfield.GenerateError as exc:
+        assert "generates nothing" in str(exc)
+
+    if not shutil.which("ffmpeg"):
+        print("    (skipped the mock-render half: ffmpeg not on PATH)")
+        return
+    from shorts import media
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"SHORTS_GENERATOR": "mock"}):
+        shot = higgsfield.make_shot("a bowl of soup, slow push in", Path(tmp) / "shot_1.mp4", tier=1)
+        assert shot.mocked and shot.cost == 0.0 and "nothing was spent" in shot.notes[0]
+        probe = media.probe(str(shot.path))
+        assert probe.height > probe.width, (probe.width, probe.height)  # 9:16, as a short must be
+        assert abs(probe.duration - 4) < 1.0, probe.duration
+
+
+def test_a_real_generation_polls_and_fails_honestly():
+    import tempfile
+    from unittest import mock
+
+    from shorts import higgsfield
+
+    creds = {"key_id": "id", "key_secret": "secret"}
+    sent = {}
+
+    class Reply:
+        def __init__(self, status, body):
+            self.status_code, self._body = status, body
+            self.text = json.dumps(body)
+
+        def json(self):
+            return self._body
+
+    def posting(url, headers=None, json=None, timeout=None):
+        sent["body"], sent["auth"] = json, headers["Authorization"]
+        return Reply(200, {"request_id": "req_1", "status_url": "https://api/status/req_1", "status": "queued"})
+
+    states = iter([
+        Reply(200, {"status": "queued"}),
+        Reply(200, {"status": "in_progress"}),
+        Reply(200, {"status": "completed", "video": {"url": "https://files/shot.mp4"}}),
+    ])
+    fake = mock.Mock(post=posting, get=lambda url, headers=None, timeout=None: next(states))
+
+    with mock.patch.dict("sys.modules", {"requests": fake}), \
+            mock.patch.object(higgsfield.time, "sleep", lambda s: None):
+        handle = higgsfield.submit("a kitchen at dawn", 6, "1080p", {"image_urls": ["https://x/a.png"]}, creds)
+        assert handle["request_id"] == "req_1"
+        assert sent["auth"] == "Key id:secret"
+        assert sent["body"]["aspect_ratio"] == "9:16" and sent["body"]["duration"] == 6
+        assert sent["body"]["generate_audio"] is False  # our own narration goes over the top
+        assert sent["body"]["image_urls"] == ["https://x/a.png"]
+        assert higgsfield.wait_for(handle, creds) == "https://files/shot.mp4"
+
+    # every way a shot can end badly says which, and nsfw is never retried into more spending
+    for state, expected in (
+        ({"status": "failed", "detail": "model unavailable"}, "failed"),
+        ({"status": "nsfw"}, "nsfw"),
+        ({"status": "completed"}, "no video on it"),
+    ):
+        once = mock.Mock(get=lambda url, headers=None, timeout=None: Reply(200, state))
+        with mock.patch.dict("sys.modules", {"requests": once}), \
+                mock.patch.object(higgsfield.time, "sleep", lambda s: None):
+            try:
+                higgsfield.wait_for({"status_url": "https://api/status/x"}, creds)
+                raise AssertionError("%s should raise" % state)
+            except higgsfield.GenerateError as exc:
+                assert expected in str(exc), (state, str(exc))
+
+    # a refused key is named as such, not reported as a broken shot
+    refusing = mock.Mock(post=lambda *a, **k: Reply(401, {"detail": "Invalid credentials"}))
+    with mock.patch.dict("sys.modules", {"requests": refusing}):
+        try:
+            higgsfield.submit("x", 6, "1080p", {}, creds)
+            raise AssertionError("401 should raise")
+        except higgsfield.GenerateError as exc:
+            assert "refused the credentials" in str(exc)
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"
