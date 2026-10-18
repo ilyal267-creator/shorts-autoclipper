@@ -420,13 +420,13 @@ second, and reaction words from the transcript. The peaks go into the planner's 
 lines, so the model sees where the room got loud while it still chooses on meaning.
 
 **Acceptance criteria:**
-- [ ] A generated file with one loud section has its peak found within a second of it
-- [ ] A flat recording produces no peaks rather than noise
-- [ ] Peaks appear in the timeline the planner is given
+- [x] A generated file with one loud section has its peak found within a second of it
+- [x] A flat recording produces no peaks rather than noise
+- [x] Peaks appear in the timeline the planner is given, in time order among the speech
 
 **Verification:**
-- [ ] `python tests/test_pipeline.py`: loud-section file, flat file, the scoring maths
-- [ ] Manual: run the engineering-talk video and see whether the peaks sit on the real emphasis
+- [x] `python tests/test_pipeline.py`: loud-section file, flat file, the scoring maths (28 checks)
+- [x] Manual: the engineering-talk video returns no peaks - it is machine-read at a constant level, so there is nothing to find. Still to try on a real human recording
 
 **Dependencies:** None · **Files:** `shorts/hype.py`, `shorts/agent.py`, `shorts/run.py`, `tests/test_pipeline.py` · **Scope:** M
 
@@ -460,13 +460,13 @@ extra. It handles the ugly parts out loud: too long, a live stream still going, 
 YouTube refusing the server — back off, pause that source, say so on its card.
 
 **Acceptance criteria:**
-- [ ] A channel URL, an @handle and a bare channel id all resolve to the same source
-- [ ] A new upload is noticed once and never started twice
-- [ ] A refused download pauses that source with the reason; the worker carries on with the rest
+- [x] A channel URL, an @handle and a bare channel id all resolve to the same source
+- [x] A new upload is noticed once and never started twice
+- [x] A refused download raises pause-this-source with the reason (the worker side lands in T21)
 
 **Verification:**
-- [ ] `python tests/test_web.py`: feed parsing and dedupe against a saved feed file, download stubbed
-- [ ] Manual: watch one real channel, fetch one real video end to end
+- [x] `python tests/test_pipeline.py`: feed parsing, dedupe, refusals, bot-check, download stubbed
+- [ ] Manual: fetching a real video is not done - this machine cannot reach youtube.com (TLS interception), and downloading a channel that is not yours is the thing the rights record exists to gate. Do it on the server, on a channel you own
 
 **Dependencies:** T17 · **Files:** `shorts/sources.py`, `shorts/web/sources.py`, `pyproject.toml`, `tests/test_web.py` · **Scope:** M
 

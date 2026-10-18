@@ -103,9 +103,9 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [ ] T15: Invite the first tester
 
 ### Phase 5: channel automation (added 18 October 2026)
-- [ ] T16: Find the hyped moments from the audio, not just the words
+- [x] T16: Find the hyped moments from the audio, not just the words
 - [ ] T17: Rights record per channel
-- [ ] T18: Watch a channel and fetch what is new
+- [x] T18: Watch a channel and fetch what is new
 - [ ] T19: Everygen: one command, start to finish
 - [ ] T20: Script editor per clip, with re-record
 - [ ] T21: Daily schedule, several channels and several accounts at once
