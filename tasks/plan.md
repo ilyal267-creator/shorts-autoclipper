@@ -111,6 +111,15 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [x] T21: Daily schedule, several channels and several accounts at once
 - [x] T22: Auto-publishing with its rails
 
+### Phase 6: generated videos (added 18 October 2026)
+- [ ] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
+- [ ] T24: Style profile from a channel's public metadata
+- [ ] T25: Idea, script and shot list from the profile
+- [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
+- [ ] T27: Generated runs in the dashboard
+- [ ] T28: Daily generation on a cadence, under a spending ceiling
+- [ ] T29: Guardrails: no identity imitation, AI disclosure, mock banner, cost ceiling
+
 ### Checkpoint 5: a day on its own
 - [ ] A watched channel posts overnight with nobody awake, and the digest says what went out
 - [ ] A channel with no rights record never auto-posts, whatever else is set
@@ -205,3 +214,81 @@ blocks server IP addresses that pull a lot (it may need cookies from a signed-in
 | An unattended run posts something wrong to every account at once | High | Compliance flags never auto-post; per-account daily caps; a global pause; a digest of everything posted |
 | "Hyped" is guessed from audio only | Med | Loud ≠ good: the model still picks, confidence is shown, and the first week runs in Review for a new source |
 | Fetching long videos daily fills the disk | Med | Source file deleted after a run completes; 14-day cleanup already planned in T13 |
+
+---
+
+# Addendum, 18 October 2026: making videos instead of cutting them
+
+## What was asked
+
+Point the platform at a channel worth copying, and have it *generate* new videos in that vein
+with Higgsfield, then publish them through the same automation.
+
+## The line this is built on
+
+Generating original videos in a channel's **style** is a different thing from reposting their
+work, and it is the version worth building: a format, a topic list and a pacing are not owned by
+anyone. What *is* owned, and what this will not touch:
+
+- **their footage** - nothing is downloaded from the modelled channel, ever. The style profile is
+  built from public metadata only: titles, descriptions, upload rhythm, and whatever the owner
+  tells us about the niche.
+- **their identity** - no channel name, logo, catchphrase-as-branding, cloned voice or likeness
+  in anything generated. A video that could be mistaken for theirs is the failure case, not the
+  goal, and the compliance stage checks for it.
+- **their scripts** - ideas are generated from the formula, never rewritten from their captions.
+
+Generated video also carries an AI disclosure on every platform that has one, which is both the
+rule and, increasingly, the thing the platforms detect anyway.
+
+## What the API actually offers (checked 18 October 2026)
+
+- `POST https://api.higgsfield.ai/bytedance/seedance-2.5/reference-to-video`
+- Auth: `Authorization: Key <HF_API_KEY_ID>:<HF_API_KEY_SECRET>`, server-side only
+- `duration` 4-30s, `aspect_ratio` includes **9:16**, `resolution` up to **1080p**, optional
+  `generate_audio` (off for us - the narration is ElevenLabs and the captions must match it)
+- Needs at least one reference: `image_urls`, `video_urls` or `audio_urls`, each a **public URL**
+- Returns `request_id` + `status_url`; poll until `completed`, result at `video.url`
+- Outputs are hosted "at least seven days" - download into the run folder immediately
+- **Open question for the build:** a reference is required, so a shot starts as an image. Either
+  generate the frame first (SOUL V2) and feed its hosted URL in, or use a model that takes a bare
+  prompt. The catalogue lists 67 video models; the build picks one and records why.
+
+## How a generated run works
+
+1. **Style profile** - a channel's public feed plus the owner's own words, read once by the model
+   into a formula: topics, hook shapes, length, pace, what the audience is there for.
+2. **Idea and script** - one original idea per run, written to that formula: hook, beats, payoff,
+   call to action, and the shot list behind it.
+3. **Shots** - each beat becomes a Higgsfield generation at the chosen tier. Mock by default.
+4. **Assembly** - ffmpeg stitches the shots, ElevenLabs narrates, captions are timed to the
+   narration, 1080x1920 out. The existing renderer does all of this already.
+5. **Review and publish** - the same screens and the same rails: compliance, drafts first,
+   per-account caps, the pause switch.
+
+## Money, which is the real risk
+
+Clipping costs a model call. Generating costs per second of video, every time, and a loop that
+generates is a loop that spends. So, following the house rule:
+
+- **A mock provider is the default**, returning bundled sample shots, with a banner on anything
+  it produced. Dev never spends.
+- **Every generation is costed before it is made.** A run that would exceed its ceiling stops and
+  says what it would have cost.
+- **A tier ladder**: 0 is free (ffmpeg over stills, no generation), 1 is cheap drafts (480p,
+  short), 2 is the real thing (1080p), 3 is premium and always asks first.
+- **A daily ceiling per tester**, enforced where the daily run cap already is.
+
+## Tasks
+
+- [ ] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
+- [ ] T24: Style profile from a channel's public metadata
+- [ ] T25: Idea, script and shot list from the profile
+- [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
+- [ ] T27: Generated runs in the dashboard: start one, see the script, regenerate a shot
+- [ ] T28: Daily generation on a cadence, under a spending ceiling
+- [ ] T29: The guardrails: no identity imitation, AI disclosure, mock banner, cost ceiling
+
+### Checkpoint 6
+- [ ] One generated video, start to finish, for less than its ceiling, reviewed before it posts
+- [ ] Nothing it produced names, shows or sounds like the channel it was modelled on
