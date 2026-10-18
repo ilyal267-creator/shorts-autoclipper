@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 
 from .. import config as config_mod, media, run as run_mod, sources
-from . import channels, connections, db
+from . import channels, connections, db, posting
 from .runs import limits, runs_started_today
 
 STAGES = ["probe", "transcribe", "plan", "copy", "compliance", "voiceover", "render", "deliver"]
@@ -179,6 +179,30 @@ def check_channels(db_path, data_dir, every_minutes: int = 60) -> int:
     return queued
 
 
+def post_what_we_may(db_path, data_dir, run_id: str) -> list[str]:
+    """Auto-publish for a finished run, as one readable line per draft."""
+    conn = db.connect(db_path)
+    try:
+        run = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    finally:
+        conn.close()
+    lines = []
+    try:
+        outcomes = posting.auto_publish(db_path, data_dir, run)
+    except Exception as exc:  # posting trouble is never the run's trouble
+        traceback.print_exc()
+        return ["auto-publish failed: %s" % exc]
+    for outcome in outcomes:
+        where = "%s %s" % (outcome["clip_id"], outcome["platform"])
+        if outcome.get("held"):
+            lines.append("%s held back: %s" % (where, outcome["held"]))
+        elif outcome.get("status") == "published":
+            lines.append("%s posted: %s" % (where, outcome.get("post_id")))
+        else:
+            lines.append("%s did not post: %s" % (where, outcome.get("error")))
+    return lines
+
+
 def work(db_path, poll_seconds: float = 2.0, once: bool = False, data_dir=None,
          every_minutes: int = 60) -> None:
     db.migrate(db_path)
@@ -196,4 +220,8 @@ def work(db_path, poll_seconds: float = 2.0, once: bool = False, data_dir=None,
             time.sleep(poll_seconds)
             continue
         print("run %s started" % run["id"], flush=True)
-        print("run %s finished: %s" % (run["id"], execute(db_path, run)), flush=True)
+        status = execute(db_path, run)
+        print("run %s finished: %s" % (run["id"], status), flush=True)
+        if status == "needs_review" and data_dir is not None:
+            for post in post_what_we_may(db_path, data_dir, run["id"]):
+                print("  %s" % post, flush=True)

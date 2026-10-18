@@ -64,6 +64,14 @@ def owned_source(db_path, source_id: int, user_id: int):
     return row
 
 
+def by_id(db_path, source_id: int):
+    conn = db.connect(db_path)
+    try:
+        return conn.execute("SELECT * FROM channel_sources WHERE id = ?", (source_id,)).fetchone()
+    finally:
+        conn.close()
+
+
 def rights_of(row) -> dict:
     """What travels with every run from this channel, and into its summary."""
     return {

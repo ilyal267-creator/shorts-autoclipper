@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from .. import auth as pipeline_auth
 from ..voice import DEFAULT_VOICES
-from . import connections
+from . import connections, posting
 from .runs import PLATFORM_NAMES, VOICE_NAMES
 
 STATE_COOKIE = "connect_state"
@@ -49,7 +49,11 @@ def register(app, page, public_url, secure_cookies) -> None:
                 "soon": SOON.get(platform),
                 "voice": VOICE_NAMES.get(DEFAULT_VOICES[platform], ""),
             })
-        return page(request, "accounts.html", nav="accounts", cards=cards, error=CONNECT_ERRORS.get(error))
+        return page(
+            request, "accounts.html", nav="accounts", cards=cards,
+            error=CONNECT_ERRORS.get(error),
+            paused=posting.paused(app.state.db_path, user["id"]), cap=posting.cap(),
+        )
 
     @app.get("/connect/youtube")
     def connect_youtube(request: Request):
@@ -90,6 +94,23 @@ def register(app, page, public_url, secure_cookies) -> None:
         )
         response.headers["location"] = "/accounts"
         return response
+
+    @app.get("/posts")
+    def posts(request: Request):
+        user = request.state.user
+        return page(
+            request, "posts.html", nav="posts",
+            posts=posting.recent(app.state.db_path, user["id"]),
+            counts=posting.counts(app.state.db_path, user["id"]),
+            paused=posting.paused(app.state.db_path, user["id"]),
+        )
+
+    @app.post("/posting/pause")
+    async def pause_posting(request: Request):
+        """The one switch that stops everything, including a run already going."""
+        form = await request.form()
+        posting.set_paused(app.state.db_path, request.state.user["id"], form.get("stop") == "yes")
+        return RedirectResponse(form.get("back") or "/posts", status_code=303)
 
     @app.post("/accounts/{connection_id}/disconnect")
     def disconnect(request: Request, connection_id: int):

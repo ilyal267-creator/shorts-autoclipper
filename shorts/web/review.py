@@ -10,8 +10,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
-from ..run import publish_draft
-from . import channels, connections, db
+from . import channels, connections, db, posting
 from .runs import PLATFORM_NAMES, VOICE_NAMES, duration_text, hide_paths, owned_run
 
 # What each platform accepts: longer copy is cut off or refused when it posts.
@@ -26,8 +25,8 @@ EDIT_ERRORS = {
     "title": "A YouTube title needs 1 to 100 characters.",
     "not_connected": "Connect that account on Accounts first.",
     "not_approved": "Approve a draft before publishing it.",
+    "paused": "Posting is paused. Turn it back on from Accounts.",
 }
-POST_URLS = {"youtube_shorts": "https://youtu.be/%s"}
 TAG = re.compile(r"^#?[\wÀ-￿]{1,60}$")
 
 
@@ -265,45 +264,15 @@ def register(app, page) -> None:
         row = versions(app.state.db_path, run_id).get((clip_id, platform))
         if row is None or row["state"] != "approved":
             return back(run_id, clip_id, platform, "not_approved")
-        try:
-            account, creds = connections.creds_for(
-                app.state.db_path, app.state.data_dir, user["id"], platform
-            )
-        except connections.ConnectError:
-            account, creds = None, None
-        if account is None or creds is None:
-            return back(run_id, clip_id, platform, "not_connected")
-
-        # what the tester edited is what posts, not what the model first wrote
-        entry.update({
-            "title": row["title"], "caption": row["caption"],
-            "hashtags": json.loads(row["hashtags_json"]),
-        })
+        if posting.paused(app.state.db_path, user["id"]):
+            return back(run_id, clip_id, platform, "paused")
         entry["caption"] = with_credit(app.state.db_path, run, entry["caption"])
-        result = publish_draft(
-            entry, platform, account["account_id"], creds,
-            dry_run=os.getenv("SHORTS_DRY_RUN") == "1",
+        result, _ = posting.send(
+            app.state.db_path, app.state.data_dir, user["id"], run_id, clip_id, platform,
+            entry, row, by="tester",
         )
-        conn = db.connect(app.state.db_path)
-        try:
-            with conn:
-                if result.status == "published":
-                    conn.execute(
-                        """UPDATE clip_versions SET state = 'published', post_id = ?, post_url = ?,
-                           published_at = datetime('now'), publish_error = NULL
-                           WHERE run_id = ? AND clip_id = ? AND platform = ?""",
-                        (result.post_id, POST_URLS.get(platform, "%s") % result.post_id, run_id, clip_id, platform),
-                    )
-                else:
-                    conn.execute(
-                        """UPDATE clip_versions SET publish_error = ?
-                           WHERE run_id = ? AND clip_id = ? AND platform = ?""",
-                        (hide_paths(result.error or "that did not go through"), run_id, clip_id, platform),
-                    )
-        finally:
-            conn.close()
-        if result.status != "published" and "no %s account" % platform.split("_")[0] in (result.error or ""):
-            connections.needs_reconnect(app.state.db_path, account["id"])
+        if result is None:
+            return back(run_id, clip_id, platform, "not_connected")
         return back(run_id, clip_id, platform)
 
     @app.post("/runs/{run_id}/clips/{clip_id}/{platform}/copy")

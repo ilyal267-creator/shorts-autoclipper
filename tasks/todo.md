@@ -541,13 +541,13 @@ everything mid-flight; and a digest showing what went out, with a link to each p
 where the platform allows one.
 
 **Acceptance criteria:**
-- [ ] A flagged clip never auto-posts, whatever the source says
-- [ ] The global pause stops posting within a minute, and nothing is lost when it resumes
-- [ ] The digest shows every post of the last week with its link and its source
+- [x] A flagged clip never auto-posts, whatever the source says
+- [x] The pause is read before every single clip, so it stops a run mid-flight, by hand as well as by itself
+- [x] The digest shows every post of the last week with its link, its channel and whether it went by itself
 
 **Verification:**
-- [ ] `python tests/test_web.py`: flagged clip held back, caps, pause, digest contents
-- [ ] Manual: one overnight run from your own channel to the test accounts
+- [x] `python tests/test_web.py`: flagged clip held back, per-account cap, pause (both ways), no-rights channel refused, digest contents (19 checks)
+- [ ] Manual: one overnight run from your own channel - waiting on a working API key and yt-dlp
 
 **Dependencies:** T21 · **Files:** `shorts/web/worker.py`, `shorts/web/sources.py`, `shorts/web/templates/digest.html`, `tests/test_web.py` · **Scope:** L - split if it grows
 

@@ -109,7 +109,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [ ] T19: Everygen: one command, start to finish
 - [ ] T20: Script editor per clip, with re-record
 - [ ] T21: Daily schedule, several channels and several accounts at once
-- [ ] T22: Auto-publishing with its rails
+- [x] T22: Auto-publishing with its rails
 
 ### Checkpoint 5: a day on its own
 - [ ] A watched channel posts overnight with nobody awake, and the digest says what went out

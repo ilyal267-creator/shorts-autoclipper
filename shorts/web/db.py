@@ -124,6 +124,13 @@ MIGRATIONS = [
     );
     ALTER TABLE runs ADD COLUMN source_id INTEGER REFERENCES channel_sources(id) ON DELETE SET NULL;
     """,
+    """
+    -- which account a clip went to, and whether a person or the worker sent it
+    ALTER TABLE clip_versions ADD COLUMN account_id TEXT;
+    ALTER TABLE clip_versions ADD COLUMN published_by TEXT;
+    -- one switch per tester that stops all posting, mid-run included
+    ALTER TABLE users ADD COLUMN posting_paused_at TEXT;
+    """,
 ]
 
 

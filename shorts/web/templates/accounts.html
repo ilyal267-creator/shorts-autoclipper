@@ -4,6 +4,16 @@
 <header class="topbar"><h1>Accounts &amp; voices</h1></header>
 <div class="content">
   {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <form class="pause-row" method="post" action="/posting/pause">
+    <input type="hidden" name="stop" value="{{ 'no' if paused else 'yes' }}">
+    <input type="hidden" name="back" value="/accounts">
+    <div>
+      <div>{{ "Posting is paused" if paused else "Posting is on" }}</div>
+      <div class="small dim">{{ "Nothing goes out, by hand or by itself, until you resume." if paused else "Each account can post %d times a day."|format(cap) }}</div>
+    </div>
+    <button class="btn {% if paused %}btn-primary{% endif %}" type="submit">{{ "Resume posting" if paused else "Pause all posting" }}</button>
+  </form>
+
   <div class="label">Where clips get posted</div>
   <div class="choice-grid account-grid">
     {% for card in cards %}

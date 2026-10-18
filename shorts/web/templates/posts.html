@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Posted · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar">
+  <h1>Posted</h1>
+  <span class="pill">{{ counts.today }} today · {{ counts.week }} this week</span>
+  {% if counts.automatic %}<span class="pill pill-accent">{{ counts.automatic }} posted by itself</span>{% endif %}
+  <div class="actions">
+    <form method="post" action="/posting/pause">
+      <input type="hidden" name="stop" value="{{ 'no' if paused else 'yes' }}">
+      <button class="btn {% if paused %}btn-primary{% endif %}" type="submit">
+        {{ "Resume posting" if paused else "Pause all posting" }}</button>
+    </form>
+  </div>
+</header>
+<div class="content">
+  {% if paused %}
+  <p class="form-error">Posting is paused. Nothing goes out, by hand or by itself, until you resume it.</p>
+  {% endif %}
+
+  {% if not posts %}
+  <div class="empty">
+    <h2>Nothing posted yet</h2>
+    <p>Clips you publish, and clips a watched channel posts by itself, appear here with their links.
+      Each account can post {{ counts.cap }} times a day.</p>
+  </div>
+  {% else %}
+  <div class="table-scroll">
+    <table class="runs-table">
+      <thead><tr><th>When</th><th>Where</th><th>Clip</th><th>From</th><th>How</th><th>Post</th></tr></thead>
+      <tbody>
+        {% for post in posts %}
+        <tr>
+          <td class="soft"><time datetime="{{ post.when.replace(" ", "T") }}Z">{{ post.when }}</time></td>
+          <td><span class="platforms"><span class="dot dot-{{ post.platform }}"></span>
+            <span class="muted small">{{ post.account }}</span></span></td>
+          <td><a class="run-link" href="/runs/{{ post.run_id }}">{{ post.clip }}</a>
+            <div class="small dim">{{ post.caption }}</div></td>
+          <td class="soft">{{ post.channel or "Uploaded by you" }}</td>
+          <td class="soft">{{ "By itself" if post.automatic else "By hand" }}</td>
+          <td>{% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener">View</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+<script>
+  (function () {
+    const today = new Date().toDateString();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      const at = new Date(el.getAttribute("datetime"));
+      if (isNaN(at)) return;
+      const clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      el.textContent = (at.toDateString() === today ? "Today" : at.toLocaleDateString([], { day: "numeric", month: "short" })) + ", " + clock;
+    });
+  })();
+</script>
+{% endblock %}

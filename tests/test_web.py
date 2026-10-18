@@ -843,6 +843,152 @@ def test_a_channel_in_trouble_pauses_itself_and_the_worker_carries_on():
         assert channels.listed(db_path, 1)[0]["active"] in (0, 1)
 
 
+class FakeYouTube:
+    """Stands in for the YouTube upload API, counting what was actually sent."""
+
+    sent = []
+
+    class Response:
+        def __init__(self, body=None, headers=None):
+            self.status_code, self.text = 200, "{}"
+            self.headers, self._body = headers or {}, body or {}
+
+        def json(self):
+            return self._body
+
+    def post(self, url, **kw):
+        FakeYouTube.sent.append(kw)
+        return self.Response(headers={"Location": "https://upload.example/s"})
+
+    def put(self, url, **kw):
+        return self.Response({"id": "posted_%d" % len(FakeYouTube.sent)})
+
+
+def finished_channel_run(client, db_path, tmp, rights="permitted", auto=1, flag_clip_1=False):
+    """A run that came from a watched channel and is sitting at needs_review."""
+    from shorts.web import worker
+
+    conn = db.connect(db_path)
+    made = conn.execute("SELECT count(*) FROM channel_sources").fetchone()[0]
+    conn.close()
+    source_id = add_source(db_path, channel_id="UCpartner%d" % made, rights=rights)
+    conn = db.connect(db_path)
+    with conn:
+        conn.execute("UPDATE channel_sources SET auto_publish = ? WHERE id = ?", (auto, source_id))
+    conn.close()
+
+    run_id = queue_run(db_path, Path(tmp))
+    worker.work(db_path, once=True)
+
+    conn = db.connect(db_path)
+    summary = json.loads(conn.execute("SELECT summary_json FROM runs WHERE id = ?", (run_id,)).fetchone()[0])
+    # the mock provider flags every clip with "no model-side policy screen ran", which would
+    # hold back the whole run - correct in life, useless for showing the happy path here
+    summary["flags_for_human_review"] = [
+        flag for flag in summary["flags_for_human_review"] if "policy screen" not in flag
+    ]
+    if flag_clip_1:
+        summary["flags_for_human_review"].append("clip_1: says something a person should look at")
+    with conn:
+        conn.execute("UPDATE runs SET source_id = ?, summary_json = ? WHERE id = ?",
+                     (source_id, json.dumps(summary), run_id))
+    conn.close()
+    return run_id, source_id
+
+
+def test_a_watched_channel_posts_by_itself_but_every_rail_can_stop_it():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import publish as publishing
+    from shorts.web import connections, posting, worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock", "SHORTS_POSTS_PER_ACCOUNT_PER_DAY": "2"}):
+        client, db_path = signed_in(tmp)
+        connect_youtube(client, channel_id="UCmine", handle="My channel")
+        run_id, source_id = finished_channel_run(client, db_path, tmp, flag_clip_1=True)
+
+        def run_auto(run_id):
+            FakeYouTube.sent = []
+            with mock.patch.object(connections.pipeline_auth, "_post_form",
+                                   lambda endpoint, fields: {"access_token": "live", "expires_in": 3600}), \
+                    mock.patch.object(publishing, "_requests", lambda: FakeYouTube()), \
+                    mock.patch.object(publishing.time, "sleep", lambda s: None):
+                return worker.post_what_we_may(db_path, Path(tmp), run_id)
+
+        lines = run_auto(run_id)
+        # clip_1 was flagged, so it waits for a person; clip_2 goes out by itself
+        assert any("clip_1 youtube_shorts held back: compliance flagged it" in line for line in lines), lines
+        assert any("clip_2 youtube_shorts posted" in line for line in lines), lines
+        assert len(FakeYouTube.sent) == 1
+
+        posts = posting.recent(db_path, 1)
+        assert len(posts) == 1 and posts[0]["automatic"] is True
+        assert posts[0]["channel"] == "Partner stream" and posts[0]["url"].startswith("https://youtu.be/")
+        page = client.get("/posts").text
+        assert "By itself" in page and "Partner stream" in page and "1 today" in page
+
+        # the pause switch stops everything, by hand as well as by itself
+        client.post("/posting/pause", data={"stop": "yes"})
+        assert posting.paused(db_path, 1)
+        second, _ = finished_channel_run(client, db_path, tmp)
+        assert all("held back: posting is paused" in line for line in run_auto(second)), run_auto(second)
+        assert FakeYouTube.sent == []
+        by_hand = client.post("/runs/%s/clips/clip_1/youtube_shorts/approve" % second, follow_redirects=False)
+        held = client.post("/runs/%s/clips/clip_1/youtube_shorts/publish" % second, follow_redirects=False)
+        assert held.headers["location"].endswith("error=paused#youtube_shorts")
+        assert "Posting is paused" in client.get("/posts").text
+
+        client.post("/posting/pause", data={"stop": "no"})
+        assert not posting.paused(db_path, 1)
+
+        # the per-account daily cap: two a day, and the third waits for tomorrow
+        third, _ = finished_channel_run(client, db_path, tmp)
+        lines = run_auto(third)
+        assert sum(1 for line in lines if "posted:" in line) == 1, lines  # one left under the cap of 2
+        fourth, _ = finished_channel_run(client, db_path, tmp)
+        lines = run_auto(fourth)
+        assert all("limit of 2 posts" in line for line in lines if "held back" in line), lines
+        assert FakeYouTube.sent == []
+
+
+def test_a_channel_with_no_rights_record_never_posts_by_itself():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts.web import posting, worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+        connect_youtube(client, channel_id="UCmine", handle="My channel")
+
+        # auto_publish forced on in the database behind the page's back, with no rights on file
+        run_id, source_id = finished_channel_run(client, db_path, tmp, rights="none", auto=1)
+        assert worker.post_what_we_may(db_path, Path(tmp), run_id) == []
+        assert posting.recent(db_path, 1) == []
+
+        # nothing was posted, and the clips are there as ordinary drafts for a person
+        assert "0 of 4 approved" in client.get("/runs/%s" % run_id).text
+        conn = db.connect(db_path)
+        states = [row[0] for row in conn.execute(
+            "SELECT state FROM clip_versions WHERE run_id = ?", (run_id,))]
+        conn.close()
+        assert states and set(states) == {"draft"}, states
+
+        # and the same channel with permission on file does post
+        conn = db.connect(db_path)
+        with conn:
+            conn.execute("UPDATE channel_sources SET rights = 'permitted' WHERE id = ?", (source_id,))
+        conn.close()
+        source = __import__("shorts.web.channels", fromlist=["x"]).by_id(db_path, source_id)
+        assert posting.held_back(db_path, 1, source, [], "UCmine") is None
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"
