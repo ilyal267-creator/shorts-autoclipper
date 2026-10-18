@@ -102,6 +102,19 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [ ] T14: Deploy to the subdomain and update Terms/Privacy for a hosted service
 - [ ] T15: Invite the first tester
 
+### Phase 5: channel automation (added 18 October 2026)
+- [ ] T16: Find the hyped moments from the audio, not just the words
+- [ ] T17: Rights record per channel
+- [ ] T18: Watch a channel and fetch what is new
+- [ ] T19: Everygen: one command, start to finish
+- [ ] T20: Script editor per clip, with re-record
+- [ ] T21: Daily schedule, several channels and several accounts at once
+- [ ] T22: Auto-publishing with its rails
+
+### Checkpoint 5: a day on its own
+- [ ] A watched channel posts overnight with nobody awake, and the digest says what went out
+- [ ] A channel with no rights record never auto-posts, whatever else is set
+
 ### Checkpoint 4: ready for testers
 - [ ] One invited tester completes upload → review → private publish on the live site without help
 - [ ] Backups restore; tokens are encrypted in the backup
@@ -129,3 +142,66 @@ them, so they can be moved to the end without blocking Phases 2 and 4.
 3. Sign-in: Google only for the test; email link later if needed
 4. Limits per tester: 3 runs a day, source videos up to 60 minutes
 5. API costs: Ilya's Anthropic and ElevenLabs keys cover all testers
+
+---
+
+# Addendum, 18 October 2026: channel automation
+
+## What was asked
+
+A one-command run ("everygen"), a scripting tool, and a daily automation that pulls video from a
+named channel, cuts the most hyped moments and posts them — automatically, to several accounts.
+
+## Decisions (answered 18 October 2026)
+
+1. **Everygen** = one command, no settings screen: a URL in, posts out, using saved defaults.
+2. **Source** = any public channel, gated per channel by a written-permission record.
+3. **Daily mode** = post automatically, with the rails below.
+4. **Scripting** = in this product, per clip, written from the real transcript.
+
+## The rights problem, stated plainly
+
+Downloading another channel's videos is against YouTube's Terms of Service, and reposting them is
+copyright infringement unless the owner has given permission. Platforms take this seriously:
+re-uploading other people's clips is what gets accounts banned and strikes issued, and it is the
+account owner — you or a tester — who carries that, not the tool.
+
+So the automation is built to be usable, but never to pretend permission exists:
+
+- Every watched channel carries a rights record: **you own it** (its channel id matches a connected
+  YouTube account), **you have written permission** (who gave it, when, where it is kept), or
+  **neither**.
+- **Auto-publishing is only available on channels with one of the first two.** A channel with
+  neither still gets watched and clipped, but its clips stop in Review, where a person decides.
+- The rights record is shown on the source, carried into each run's summary, and included in what
+  the compliance stage checks.
+- Anything compliance flags never auto-posts, whatever the rights record says.
+
+Two practical limits worth knowing before this is built: downloading needs `yt-dlp`, and YouTube
+blocks server IP addresses that pull a lot (it may need cookies from a signed-in browser); and the
+"most hyped moments" detector hears the audio, it does not watch the picture.
+
+## Architecture additions
+
+- **`shorts/hype.py`** — one ffmpeg pass gives per-second loudness; combined with words per second
+  and reaction words from the transcript it marks candidate peaks, which go into the planner's
+  timeline as extra lines. The model still chooses; this tells it where the room got loud.
+- **`shorts/sources.py`** — a channel's RSS feed (`/feeds/videos.xml`) says when something new is
+  up; `yt-dlp` fetches it into the run folder. No API key, no scraping of pages.
+- **`channel_sources`** table — url, resolved channel id, rights record, preset, platforms,
+  per-platform auto-publish, cadence, last video seen. Several can be added at once, one URL per
+  line, sharing a preset.
+- **Several accounts per platform** — `connections` becomes one row per account with a label, so
+  one clip can fan out to three TikToks with spacing between them.
+- **Worker** gains two more things to pick up besides runs: due channel checks, and single-clip
+  re-renders from the script editor.
+
+## Risks this adds
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Reposting other people's video gets accounts struck or banned | High | Rights record per channel; auto-publish only with ownership or permission; everything else stops in Review |
+| YouTube blocks the server for downloading | Med | Back off and pause the source, say so on its card; let the tester supply browser cookies |
+| An unattended run posts something wrong to every account at once | High | Compliance flags never auto-post; per-account daily caps; a global pause; a digest of everything posted |
+| "Hyped" is guessed from audio only | Med | Loud ≠ good: the model still picks, confidence is shown, and the first week runs in Review for a new source |
+| Fetching long videos daily fills the disk | Med | Source file deleted after a run completes; 14-day cleanup already planned in T13 |

@@ -405,3 +405,153 @@ invite one real tester and watch their first run's log for problems.
 - [ ] All acceptance criteria above met
 - [ ] Open questions resolved
 - [ ] Ilya approves inviting the rest
+
+---
+
+## Phase 5: channel automation (added 18 October 2026)
+
+The rights rules these tasks enforce are in [plan.md](plan.md), addendum of 18 October 2026.
+
+### T16: Find the hyped moments from the audio, not just the words
+
+**Description:** `shorts/hype.py` takes one ffmpeg pass over the chosen audio track and returns
+per-second loudness, then scores windows by loudness above the recording's own baseline, words per
+second, and reaction words from the transcript. The peaks go into the planner's timeline as extra
+lines, so the model sees where the room got loud while it still chooses on meaning.
+
+**Acceptance criteria:**
+- [ ] A generated file with one loud section has its peak found within a second of it
+- [ ] A flat recording produces no peaks rather than noise
+- [ ] Peaks appear in the timeline the planner is given
+
+**Verification:**
+- [ ] `python tests/test_pipeline.py`: loud-section file, flat file, the scoring maths
+- [ ] Manual: run the engineering-talk video and see whether the peaks sit on the real emphasis
+
+**Dependencies:** None · **Files:** `shorts/hype.py`, `shorts/agent.py`, `shorts/run.py`, `tests/test_pipeline.py` · **Scope:** M
+
+---
+
+### T17: Rights record per channel
+
+**Description:** Before a channel can be watched it carries a rights record: owned (its channel id
+matches a connected YouTube account), permitted (who gave permission, when, where it is kept), or
+neither. Stored with the source, shown on its card, copied into every run that comes from it, and
+read by the compliance stage. Auto-publishing is refused without one — by the server, not the form.
+
+**Acceptance criteria:**
+- [ ] A source with no rights record cannot be set to auto-publish, through the form or by posting straight to the endpoint
+- [ ] Ownership is checked against the connected YouTube account, never typed in
+- [ ] Each run's summary carries the rights record it ran under
+
+**Verification:**
+- [ ] `python tests/test_web.py`: all three records, the refusal path, summary contents
+- [ ] Manual: a permitted channel and a bare one side by side on the sources page
+
+**Dependencies:** T8 (YouTube connection, for ownership) · **Files:** `shorts/web/sources.py`, `shorts/web/db.py`, `shorts/compliance.py`, `tests/test_web.py` · **Scope:** M
+
+---
+
+### T18: Watch a channel and fetch what's new
+
+**Description:** `shorts/sources.py` resolves a channel URL or @handle to its id, reads its RSS
+feed for new uploads, and fetches one with `yt-dlp` into the run folder, behind a `[channels]`
+extra. It handles the ugly parts out loud: too long, a live stream still going, members-only, and
+YouTube refusing the server — back off, pause that source, say so on its card.
+
+**Acceptance criteria:**
+- [ ] A channel URL, an @handle and a bare channel id all resolve to the same source
+- [ ] A new upload is noticed once and never started twice
+- [ ] A refused download pauses that source with the reason; the worker carries on with the rest
+
+**Verification:**
+- [ ] `python tests/test_web.py`: feed parsing and dedupe against a saved feed file, download stubbed
+- [ ] Manual: watch one real channel, fetch one real video end to end
+
+**Dependencies:** T17 · **Files:** `shorts/sources.py`, `shorts/web/sources.py`, `pyproject.toml`, `tests/test_web.py` · **Scope:** M
+
+---
+
+### T19: Everygen: one command, start to finish
+
+**Description:** One shortcut that takes a video URL, a channel URL or a file and does the rest from
+saved defaults, with no settings screen: `python -m shorts everygen <url>`, and a single field at
+the top of Runs. The defaults live per tester (clips, framing, platforms, voices, caption style,
+what happens when clips are ready) and are the same ones the daily automation uses.
+
+**Acceptance criteria:**
+- [ ] One command with only a URL produces drafts using the saved defaults
+- [ ] With nothing saved it uses the documented defaults and says which it used
+- [ ] The same defaults drive a manual run and the daily automation
+
+**Verification:**
+- [ ] `python tests/test_web.py`: defaults applied; the config matches the equivalent manual run
+- [ ] Manual: `everygen` on one video, start to finish
+
+**Dependencies:** T18 · **Files:** `shorts/web/sources.py`, `shorts/web/settings.py`, `shorts/__main__.py`, `tests/test_web.py` · **Scope:** M
+
+---
+
+### T20: Script editor per clip, with re-record
+
+**Description:** On the review card the narration script and hook become editable, with a rewrite
+button asking Claude for two or three alternatives written from that clip's own transcript. Saving
+queues a re-record of that platform's version only: the voice reads the new script, captions are
+re-timed to it, that one file is re-rendered, and the card swaps the video when it's done.
+
+**Acceptance criteria:**
+- [ ] An edited script re-records and re-renders only that platform's version
+- [ ] The captions on screen match the new script
+- [ ] A script too long for the clip is flagged before it is recorded, not after
+
+**Verification:**
+- [ ] `python tests/test_web.py`: job queued, worker re-renders, file replaced (ElevenLabs stubbed)
+- [ ] Manual: rewrite one hook and listen to the result
+
+**Dependencies:** T7, T11 · **Files:** `shorts/web/review.py`, `shorts/web/worker.py`, `shorts/agent.py`, `shorts/web/templates/review.html`, `tests/test_web.py` · **Scope:** M
+
+---
+
+### T21: Daily schedule, several channels and several accounts at once
+
+**Description:** Sources get a cadence (daily, or every N hours) and the worker checks the due ones
+between runs. Several channels can be added at once, one URL per line, sharing a preset. On the
+posting side, `connections` allows more than one account per platform, each labelled, so one clip
+fans out to several accounts with spacing between them. A sources page lists them with last check,
+last video, next check and a pause switch.
+
+**Acceptance criteria:**
+- [ ] Ten channels pasted at once become ten sources sharing one preset
+- [ ] A daily source is checked once a day; a paused one is not checked at all
+- [ ] One clip posts to three accounts on the same platform, spaced, each logged separately
+
+**Verification:**
+- [ ] `python tests/test_web.py`: fake clock over three days, bulk add, fan-out with a stubbed publisher
+- [ ] Manual: two channels and two accounts for a day
+
+**Dependencies:** T18, T8-T10 · **Files:** `shorts/web/sources.py`, `shorts/web/worker.py`, `shorts/web/connections.py`, `shorts/web/db.py`, `tests/test_web.py` · **Scope:** L - split if it grows
+
+---
+
+### T22: Auto-publishing with its rails
+
+**Description:** A source with a rights record can post by itself, per platform. The rails: a clip
+with any compliance flag goes to Review instead; per-account daily caps; a global pause that stops
+everything mid-flight; and a digest showing what went out, with a link to each post and an undo
+where the platform allows one.
+
+**Acceptance criteria:**
+- [ ] A flagged clip never auto-posts, whatever the source says
+- [ ] The global pause stops posting within a minute, and nothing is lost when it resumes
+- [ ] The digest shows every post of the last week with its link and its source
+
+**Verification:**
+- [ ] `python tests/test_web.py`: flagged clip held back, caps, pause, digest contents
+- [ ] Manual: one overnight run from your own channel to the test accounts
+
+**Dependencies:** T21 · **Files:** `shorts/web/worker.py`, `shorts/web/sources.py`, `shorts/web/templates/digest.html`, `tests/test_web.py` · **Scope:** L - split if it grows
+
+### Checkpoint 5: a day on its own
+- [ ] A watched channel posts overnight with nobody awake, and the digest says what went out
+- [ ] A channel with no rights record never auto-posts, whatever else is set
+- [ ] Review with Ilya
