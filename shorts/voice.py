@@ -107,8 +107,34 @@ def pick_voices(platforms: list[str], configured: dict) -> dict[str, str]:
     return chosen
 
 
+def mocked() -> bool:
+    """No key, or asked for silence: make a track of the right length and spend nothing."""
+    return os.getenv("SHORTS_VOICE") == "mock" or not os.getenv("ELEVENLABS_API_KEY")
+
+
+def mock_voice(text: str, out_path: Path) -> list[Word]:
+    """Silence as long as the words would take, with the words spread across it.
+
+    Not a stand-in file: the assembly, the caption timing and the renderer all work from a
+    real track of a real length, so a fake one has to be exactly that."""
+    from . import media
+
+    words = text.split()
+    seconds = max(len(words) / WORDS_PER_SECOND, 1.0)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    media.require_ffmpeg()
+    media.run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=mono:sample_rate=44100",
+        "-t", "%.2f" % seconds, "-c:a", "libmp3lame", str(out_path),
+    ])
+    return script_timed(text, [])
+
+
 def synthesize(text: str, voice_id: str, out_path: Path, model: str = DEFAULT_MODEL) -> list[Word]:
     """Speak `text` into out_path (mp3) and return word timings on the narration's own clock."""
+    if mocked():
+        return mock_voice(text, out_path)
     requests = _requests()
     response = requests.post(
         API + "/v1/text-to-speech/%s/with-timestamps" % voice_id,

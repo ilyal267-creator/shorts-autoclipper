@@ -1105,6 +1105,51 @@ def test_a_script_is_cut_to_fit_and_checked_before_it_is_generated():
     assert all("[MOCK]" in v["narration"] and "must not be published" in v["narration"] for v in mocked["videos"])
 
 
+def test_a_script_is_assembled_into_one_vertical_video():
+    import shutil
+    import tempfile
+    from unittest import mock
+
+    from shorts import assemble, media
+
+    script = {
+        "narration": "Your cycle ended forty-one minutes ago. There is a posted limit.",
+        "shots": [
+            {"prompt": "a basset hound at an open washing machine, wide, night", "seconds": 4, "beat": "hook"},
+            {"prompt": "a grey cat on a folding table, still, watching", "seconds": 4, "beat": "payoff"},
+        ],
+    }
+
+    # the command: every shot to 1080x1920, joined, captioned, the voice over it, and an end
+    cmd = assemble.build_command([Path("a.mp4"), Path("b.mp4")], Path("v.mp3"), Path("c.ass"), Path("o.mp4"), 8)
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert graph.count("scale=1080:1920") == 2 and "concat=n=2:v=1:a=0" in graph
+    assert "subtitles=" in graph and "[4:a]" not in graph and "[2:a]aresample=48000[aout]" in graph
+    assert "apad" not in graph, "apad plus -shortest hangs the encoder"
+    assert cmd[cmd.index("-t") + 1] == "8.000"
+    silent = assemble.build_command([Path("a.mp4")], None, Path("c.ass"), Path("o.mp4"), 4)
+    assert "-an" in silent and "-c:a" not in silent
+
+    try:
+        assemble.build_command([], None, Path("c.ass"), Path("o.mp4"), 4)
+        raise AssertionError("no shots should refuse")
+    except assemble.AssembleError:
+        pass
+
+    if not shutil.which("ffmpeg"):
+        print("    (skipped the build half: ffmpeg not on PATH)")
+        return
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            os.environ, {"SHORTS_GENERATOR": "mock", "SHORTS_VOICE": "mock"}):
+        built = assemble.make(script, Path(tmp), name="test_clip", tier=1)
+        assert built["cost"] == 0.0 and built["mocked"]
+        probe = media.probe(built["path"])
+        assert (probe.width, probe.height) == (1080, 1920), (probe.width, probe.height)
+        assert abs(probe.duration - 8) < 1.5, probe.duration
+        assert len(built["shots"]) == 2 and Path(built["shots"][0]).exists()
+        assert "Dialogue:" in Path(tmp, "test_clip.ass").read_text(encoding="utf-8")
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"
