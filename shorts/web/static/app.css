@@ -261,3 +261,15 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .btn-approve { background: var(--button); border-color: var(--button); font-weight: 500; }
 .approved-mark { flex-grow: 1; display: flex; align-items: center; gap: 8px; color: var(--ok); font-weight: 500; height: 44px; }
 @media (max-width: 520px) { .card-body { flex-direction: column; } .card-video { width: 100%; height: auto; aspect-ratio: 9 / 16; } }
+
+/* accounts */
+.account-grid { align-items: start; margin-top: 8px; }
+.account-card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.account-card.is-on { border-color: var(--accent-line); }
+.account-card h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.account-card .card-head .small { margin-left: auto; }
+.account-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.account-row .btn { height: 32px; }
+.ok { color: var(--ok); }
+.warn { color: var(--accent); }
+.card-publish-error { margin: 0; font-size: 13px; color: var(--bad); line-height: 1.45; }

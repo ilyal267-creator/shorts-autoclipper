@@ -120,8 +120,15 @@ python -m shorts.web invite someone@example.com   # only invited emails can sign
 python -m shorts.web serve --port 8010
 ```
 
-Sign-in needs a Google Cloud OAuth client of type **Web application** with
-`<SHORTS_PUBLIC_URL>/auth/google/callback` as an authorised redirect URI.
+Sign-in needs a Google Cloud OAuth client of type **Web application**. Add both redirect URIs:
+
+- `<SHORTS_PUBLIC_URL>/auth/google/callback` — signing in to the dashboard
+- `<SHORTS_PUBLIC_URL>/connect/youtube/callback` — connecting a channel to post to
+
+Connecting a channel also needs `youtube.upload` and `youtube.readonly` on the consent screen.
+Each tester connects their own channel from **Accounts & voices**; their refresh token is sealed
+with `SHORTS_SECRET_KEY` before it is stored, and uploads stay private until the Cloud project
+passes Google's YouTube API audit.
 
 ## Without an API key
 

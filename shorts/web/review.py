@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
-from . import db
+from ..run import publish_draft
+from . import connections, db
 from .runs import PLATFORM_NAMES, VOICE_NAMES, duration_text, hide_paths, owned_run
 
 # What each platform accepts: longer copy is cut off or refused when it posts.
@@ -22,7 +24,10 @@ EDIT_ERRORS = {
     "hashtags": "Hashtags are words or #words separated by spaces, with no punctuation inside them.",
     "too_long": "That's more than this platform allows. Shorten the caption or use fewer hashtags.",
     "title": "A YouTube title needs 1 to 100 characters.",
+    "not_connected": "Connect that account on Accounts first.",
+    "not_approved": "Approve a draft before publishing it.",
 }
+POST_URLS = {"youtube_shorts": "https://youtu.be/%s"}
 TAG = re.compile(r"^#?[\wÀ-￿]{1,60}$")
 
 
@@ -99,6 +104,11 @@ def register(app, page) -> None:
         saved = versions(app.state.db_path, run["id"])
         general, per_clip = flags_for(summary)
         voices = summary.get("voices") or {}
+        connected = {
+            row["platform"]
+            for row in connections.listed(app.state.db_path, request.state.user["id"])
+            if row["status"] == "ok"
+        }
 
         clips = []
         for c in summary.get("clips", []):
@@ -122,6 +132,10 @@ def register(app, page) -> None:
                     "synthetic": entry.get("synthetic_media"),
                     "flags": flags,
                     "limits": LIMITS.get(platform, {}),
+                    "connected": platform in connected,
+                    "published": bool(row and row["state"] == "published"),
+                    "post_url": row["post_url"] if row else None,
+                    "publish_error": row["publish_error"] if row else None,
                 })
             clips.append({
                 "id": c["clip_id"],
@@ -136,10 +150,11 @@ def register(app, page) -> None:
             raise HTTPException(409, "this run has no clips")
         current = next((c for c in clips if c["id"] == clip), clips[0])
         drafts = [card for c in clips for card in c["cards"] if card["status"] == "draft"]
-        approved = sum(1 for card in drafts if card["approved"])
+        approved = sum(1 for card in drafts if card["approved"] or card["published"])
+        posted = sum(1 for card in drafts if card["published"])
         return page(
             request, "review.html", nav="runs", run=run, clips=clips, clip=current, general_flags=general,
-            approved=approved, drafts=len(drafts), error=EDIT_ERRORS.get(error),
+            approved=approved, posted=posted, drafts=len(drafts), error=EDIT_ERRORS.get(error),
         )
 
     app.state.review_page = review_page
@@ -217,6 +232,56 @@ def register(app, page) -> None:
         finally:
             conn.close()
         return RedirectResponse("/runs/%s" % run_id, status_code=303)
+
+    @app.post("/runs/{run_id}/clips/{clip_id}/{platform}/publish")
+    def publish(request: Request, run_id: str, clip_id: str, platform: str):
+        """Post one approved draft, as the copy reads now, to this tester's own account."""
+        user = request.state.user
+        run, summary = load(request, run_id)
+        entry = dict(draft_or_404(run_id, clip_id, platform, summary))
+        ensure_versions(app.state.db_path, run_id, summary)
+        row = versions(app.state.db_path, run_id).get((clip_id, platform))
+        if row is None or row["state"] != "approved":
+            return back(run_id, clip_id, platform, "not_approved")
+        try:
+            account, creds = connections.creds_for(
+                app.state.db_path, app.state.data_dir, user["id"], platform
+            )
+        except connections.ConnectError:
+            account, creds = None, None
+        if account is None or creds is None:
+            return back(run_id, clip_id, platform, "not_connected")
+
+        # what the tester edited is what posts, not what the model first wrote
+        entry.update({
+            "title": row["title"], "caption": row["caption"],
+            "hashtags": json.loads(row["hashtags_json"]),
+        })
+        result = publish_draft(
+            entry, platform, account["account_id"], creds,
+            dry_run=os.getenv("SHORTS_DRY_RUN") == "1",
+        )
+        conn = db.connect(app.state.db_path)
+        try:
+            with conn:
+                if result.status == "published":
+                    conn.execute(
+                        """UPDATE clip_versions SET state = 'published', post_id = ?, post_url = ?,
+                           published_at = datetime('now'), publish_error = NULL
+                           WHERE run_id = ? AND clip_id = ? AND platform = ?""",
+                        (result.post_id, POST_URLS.get(platform, "%s") % result.post_id, run_id, clip_id, platform),
+                    )
+                else:
+                    conn.execute(
+                        """UPDATE clip_versions SET publish_error = ?
+                           WHERE run_id = ? AND clip_id = ? AND platform = ?""",
+                        (hide_paths(result.error or "that did not go through"), run_id, clip_id, platform),
+                    )
+        finally:
+            conn.close()
+        if result.status != "published" and "no %s account" % platform.split("_")[0] in (result.error or ""):
+            connections.needs_reconnect(app.state.db_path, account["id"])
+        return back(run_id, clip_id, platform)
 
     @app.post("/runs/{run_id}/clips/{clip_id}/{platform}/copy")
     async def edit_copy(request: Request, run_id: str, clip_id: str, platform: str):

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .. import auth as pipeline_auth
-from . import auth, db, review, runs as runs_pages
+from . import accounts, auth, db, review, runs as runs_pages
 
 HERE = Path(__file__).resolve().parent
 PUBLIC_PATHS = ("/signin", "/auth/", "/health", "/static/")
@@ -129,5 +129,6 @@ def create_app(data: Path | None = None) -> FastAPI:
 
     runs_pages.register(app, page)
     review.register(app, page)
+    accounts.register(app, page, public_url, secure_cookies)
 
     return app

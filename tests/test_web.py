@@ -455,6 +455,141 @@ def test_review_plays_each_version_and_keeps_approvals_and_edits():
         assert "All 4 approved" in client.get("/runs/%s" % run_id).text
 
 
+def connect_youtube(client: TestClient, channel_id: str = "UCtester", handle: str = "Test channel"):
+    """Walk the real connect flow with Google and the YouTube API stubbed out."""
+    from shorts.web import connections
+
+    start = client.get("/connect/youtube", follow_redirects=False)
+    assert start.status_code == 303, start.text
+    url = start.headers["location"]
+    assert "youtube.upload" in url and "access_type=offline" in url and "prompt=select_account+consent" in url
+    state = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["state"][0]
+    with mock.patch.object(connections.pipeline_auth, "_post_form",
+                           lambda endpoint, fields: {"refresh_token": "refresh-" + channel_id, "access_token": "live-token"}), \
+            mock.patch.object(connections, "channel_of", lambda token: {"account_id": channel_id, "handle": handle}):
+        return client.get("/connect/youtube/callback", follow_redirects=False,
+                          params={"code": "c0de", "state": state, "scope": "https://www.googleapis.com/auth/youtube.upload"})
+
+
+def test_connecting_youtube_seals_the_token_and_shows_the_channel():
+    from shorts.web import connections, crypto
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        assert "Not connected" in client.get("/accounts").text
+
+        assert connect_youtube(client).headers["location"] == "/accounts"
+        page = client.get("/accounts").text
+        assert "Test channel" in page and "Connected" in page and "Connect another channel" in page
+
+        # the refresh token is unreadable in the database file itself
+        conn = db.connect(db_path)
+        row = conn.execute("SELECT * FROM connections").fetchone()
+        conn.close()
+        assert row["platform"] == "youtube_shorts" and row["account_id"] == "UCtester"
+        assert b"refresh-UCtester" not in bytes(row["secret"])
+        assert crypto.open_sealed(Path(tmp), row["secret"])["refresh_token"] == "refresh-UCtester"
+
+        # a callback this browser never started, and one where the upload box was left unticked
+        fresh = TestClient(client.app)
+        auth.invite(db_path, "second@example.com")
+        sign_in(fresh, "second@example.com")
+        forged = fresh.get("/connect/youtube/callback", params={"code": "x", "state": "attacker"}, follow_redirects=False)
+        assert forged.headers["location"] == "/accounts?error=failed"
+        start = client.get("/connect/youtube", follow_redirects=False)
+        state = urllib.parse.parse_qs(urllib.parse.urlparse(start.headers["location"]).query)["state"][0]
+        refused = client.get("/connect/youtube/callback", follow_redirects=False,
+                             params={"code": "c0de", "state": state, "scope": "openid email"})
+        assert refused.headers["location"] == "/accounts?error=refused"
+        assert "give us permission to upload" in client.get("/accounts?error=refused").text
+
+        # disconnecting is mine to do, and only mine
+        conn = db.connect(db_path)
+        connection_id = conn.execute("SELECT id FROM connections").fetchone()[0]
+        conn.close()
+        assert fresh.post("/accounts/%d/disconnect" % connection_id, follow_redirects=False).status_code == 404
+        client.post("/accounts/%d/disconnect" % connection_id)
+        assert "Not connected" in client.get("/accounts").text
+        assert connections.listed(db_path, 1) == []
+
+
+def test_publishing_a_draft_uses_this_testers_own_channel():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import publish as publishing
+    from shorts.web import connections, worker
+
+    sent = []
+
+    class Response:
+        def __init__(self, body=None, headers=None, status=200):
+            self.status_code, self.text = status, "{}"
+            self.headers, self._body = headers or {}, body or {}
+
+        def json(self):
+            return self._body
+
+    class FakeRequests:
+        def post(self, url, **kw):
+            sent.append(kw)
+            return Response(headers={"Location": "https://upload.example/s"})
+
+        def put(self, url, **kw):
+            return Response({"id": "yt_posted_1"})
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+        run_id = queue_run(db_path, Path(tmp))
+        worker.work(db_path, once=True)
+        base = "/runs/%s/clips/clip_1/youtube_shorts" % run_id
+
+        # nothing connected yet: the card offers no publish button and the endpoint refuses
+        assert "Publish privately" not in client.get("/runs/%s" % run_id).text
+        client.post(base + "/approve")
+        refused = client.post(base + "/publish", follow_redirects=False)
+        assert refused.headers["location"].endswith("error=not_connected#youtube_shorts")
+
+        connect_youtube(client, channel_id="UCmine", handle="My channel")
+        assert "Publish privately" in client.get("/runs/%s" % run_id).text
+
+        # an approved draft posts with this tester's token and the copy as it reads now
+        client.post(base + "/copy", data={"title": "Scope, not typing", "caption": "edited", "hashtags": "#shorts"})
+        client.post(base + "/approve")
+        with mock.patch.object(connections.pipeline_auth, "_post_form", lambda endpoint, fields: {"access_token": "live-for-UCmine", "expires_in": 3600}), \
+                mock.patch.object(publishing, "_requests", lambda: FakeRequests()), \
+                mock.patch.object(publishing.time, "sleep", lambda s: None):
+            posted = client.post(base + "/publish", follow_redirects=False)
+        assert "error" not in posted.headers["location"], posted.headers["location"]
+        assert sent and sent[0]["headers"]["Authorization"] == "Bearer live-for-UCmine"
+        assert sent[0]["json"]["snippet"]["title"] == "Scope, not typing"
+        assert sent[0]["json"]["status"]["privacyStatus"] == "private"
+
+        page = client.get("/runs/%s" % run_id).text
+        assert "Posted" in page and "https://youtu.be/yt_posted_1" in page and "1 of 4 posted" in page
+
+        # a draft that is not approved never posts
+        other = "/runs/%s/clips/clip_2/youtube_shorts" % run_id
+        assert client.post(other + "/publish", follow_redirects=False).headers["location"].endswith("error=not_approved#youtube_shorts")
+
+        # a revoked connection asks to be reconnected instead of failing quietly
+        conn = db.connect(db_path)
+        connection_id = conn.execute("SELECT id FROM connections").fetchone()[0]
+        conn.close()
+        connections._tokens.clear()
+        client.post(other + "/approve")
+        with mock.patch.object(connections.pipeline_auth, "_post_form",
+                               mock.Mock(side_effect=connections.pipeline_auth.AuthError("token endpoint said 400"))):
+            gone = client.post(other + "/publish", follow_redirects=False)
+        assert gone.headers["location"].endswith("error=not_connected#youtube_shorts")
+        conn = db.connect(db_path)
+        assert conn.execute("SELECT status FROM connections WHERE id = ?", (connection_id,)).fetchone()[0] == "reconnect"
+        conn.close()
+        assert "stopped working" in client.get("/accounts").text
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

@@ -5,7 +5,7 @@
   <a class="dim" href="/runs">Runs</a><span class="faint">/</span>
   <h1>{{ run.source_name }}</h1>
   <span class="pill {{ 'pill-ok' if approved == drafts else 'pill-accent' }}">
-    {% if approved == drafts %}All {{ drafts }} approved{% else %}{{ approved }} of {{ drafts }} approved{% endif %}
+    {% if posted %}{{ posted }} of {{ drafts }} posted{% elif approved == drafts %}All {{ drafts }} approved{% else %}{{ approved }} of {{ drafts }} approved{% endif %}
   </span>
   <div class="actions">
     {% if approved < drafts %}
@@ -91,11 +91,20 @@
         </form>
       </details>
 
+      {% if card.publish_error %}<p class="card-publish-error">That didn't post: {{ card.publish_error }}</p>{% endif %}
       <div class="card-actions">
-        {% if card.approved %}
+        {% if card.published %}
+        <span class="approved-mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Posted</span>
+        {% if card.post_url %}<a class="btn" href="{{ card.post_url }}" target="_blank" rel="noopener">View post</a>{% endif %}
+        {% elif card.approved %}
         <span class="approved-mark">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approved</span>
         <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/unapprove"><button class="btn" type="submit">Undo</button></form>
+        {% if card.connected %}
+        <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/publish">
+          <button class="btn btn-primary" type="submit">Publish privately</button></form>
+        {% endif %}
         {% else %}
         <form method="post" action="/runs/{{ run.id }}/clips/{{ clip.id }}/{{ card.platform }}/approve"><button class="btn btn-approve" type="submit">Approve</button></form>
         {% endif %}

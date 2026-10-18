@@ -77,6 +77,26 @@ MIGRATIONS = [
         PRIMARY KEY (run_id, clip_id, platform)
     );
     """,
+    """
+    -- one row per connected account, not per platform: a tester can hold several
+    CREATE TABLE connections (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        platform TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        handle TEXT,
+        -- sealed: a refresh token is a standing right to post as this person
+        secret BLOB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ok',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (user_id, platform, account_id)
+    );
+    ALTER TABLE clip_versions ADD COLUMN post_id TEXT;
+    ALTER TABLE clip_versions ADD COLUMN post_url TEXT;
+    ALTER TABLE clip_versions ADD COLUMN published_at TEXT;
+    ALTER TABLE clip_versions ADD COLUMN publish_error TEXT;
+    """,
 ]
 
 

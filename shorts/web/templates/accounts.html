@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Accounts &amp; voices · Shorts Autoclipper{% endblock %}
+{% block main %}
+<header class="topbar"><h1>Accounts &amp; voices</h1></header>
+<div class="content">
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <div class="label">Where clips get posted</div>
+  <div class="choice-grid account-grid">
+    {% for card in cards %}
+    <section class="account-card {% if card.accounts %}is-on{% endif %}">
+      <header class="card-head">
+        <span class="dot dot-{{ card.platform }}"></span>
+        <h2>{{ card.name }}</h2>
+        <span class="small {% if card.accounts %}ok{% else %}muted{% endif %}">
+          {{ "Connected" if card.accounts else "Not connected" }}</span>
+      </header>
+
+      {% for account in card.accounts %}
+      <div class="account-row">
+        <div>
+          <div>{{ account.handle }}</div>
+          {% if account.needs_reconnect %}
+          <div class="small warn">This connection stopped working. Connect it again.</div>
+          {% else %}
+          <div class="small dim">Uploads stay private. AI voices are disclosed.</div>
+          {% endif %}
+        </div>
+        <form method="post" action="/accounts/{{ account.id }}/disconnect">
+          <button class="btn" type="submit">Disconnect</button>
+        </form>
+      </div>
+      {% endfor %}
+
+      {% if card.connectable %}
+      <a class="btn {% if not card.accounts %}btn-primary{% endif %}" href="/connect/youtube">
+        {{ "Connect another channel" if card.accounts else "Connect YouTube" }}</a>
+      {% else %}
+      <p class="small dim">{{ card.soon }}</p>
+      {% endif %}
+      <p class="small dim">Narrated clips are read by {{ card.voice }} unless you change it.</p>
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
