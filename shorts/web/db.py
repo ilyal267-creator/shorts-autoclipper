@@ -154,6 +154,14 @@ MIGRATIONS = [
                published_at, COALESCE(published_by, 'tester')
         FROM clip_versions WHERE published_at IS NOT NULL;
     """,
+    """
+    -- what a run looks like when nobody fills in a form
+    CREATE TABLE user_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        json TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
 ]
 
 

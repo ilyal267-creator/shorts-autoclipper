@@ -10,6 +10,16 @@
   </div>
 </header>
 <div class="content">
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <form class="everygen" method="post" action="/everygen">
+    <label class="label" for="everygen-url">Paste a video or channel address and let it run</label>
+    <div class="everygen-row">
+      <input class="input" id="everygen-url" name="url" required
+        placeholder="https://www.youtube.com/watch?v=… or @achannel">
+      <button class="btn btn-primary" type="submit">Go</button>
+    </div>
+    <p class="small dim">{{ defaults }} · <a href="/accounts">change</a></p>
+  </form>
   {% if not runs %}
   <div class="empty">
     <h2>No runs yet</h2>

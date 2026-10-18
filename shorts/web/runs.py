@@ -33,6 +33,15 @@ START_ERRORS = {
 }
 
 
+EVERYGEN_ERRORS = {
+    "cap": "You have used today's runs. More tomorrow.",
+    "not_found": "That did not look like a video or a channel.",
+    "refused": "YouTube refused this server. It may need cookies from a signed-in browser.",
+    "unreadable": "That video could not be read.",
+    "failed": "That did not work. Try again, or start a run the long way.",
+}
+
+
 def limits() -> dict:
     return {
         "max_bytes": int(os.getenv("SHORTS_MAX_UPLOAD_BYTES", 4 * 1024**3)),

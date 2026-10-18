@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .. import auth as pipeline_auth
-from . import accounts, auth, channels, db, review, runs as runs_pages
+from . import accounts, auth, channels, db, everygen, review, runs as runs_pages
 
 HERE = Path(__file__).resolve().parent
 PUBLIC_PATHS = ("/signin", "/auth/", "/health", "/static/")
@@ -122,14 +122,21 @@ def create_app(data: Path | None = None) -> FastAPI:
         return RedirectResponse("/runs", status_code=303)
 
     @app.get("/runs")
-    def runs(request: Request):
+    def runs(request: Request, error: str = ""):
+        from . import settings as settings_mod
+
         listed = runs_pages.list_runs(app.state.db_path, request.state.user["id"])
         active = any(r["status"] in ("queued", "running") for r in listed)
-        return page(request, "runs.html", nav="runs", runs=listed, active=active)
+        return page(
+            request, "runs.html", nav="runs", runs=listed, active=active,
+            defaults=settings_mod.described(app.state.db_path, request.state.user["id"]),
+            error=runs_pages.EVERYGEN_ERRORS.get(error),
+        )
 
     runs_pages.register(app, page)
     review.register(app, page)
     accounts.register(app, page, public_url, secure_cookies)
     channels.register(app, page)
+    everygen.register(app, page)
 
     return app

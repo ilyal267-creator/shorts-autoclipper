@@ -1097,6 +1097,117 @@ def test_one_clip_reaches_three_accounts_each_logged_on_its_own():
         assert "Second channel" in page and "6 this week" in page
 
 
+def test_everygen_starts_a_run_from_one_address_and_the_saved_defaults():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import sources
+    from shorts.web import everygen, settings
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock", "SHORTS_RUNS_PER_DAY": "10"}):
+        client, db_path = signed_in(tmp)
+        video = Path(tmp) / "upload.mp4"
+        make_video(video, seconds=40, audio_tracks=1)
+
+        def fetch(url, into, max_minutes):
+            into.mkdir(parents=True, exist_ok=True)
+            saved = into / "source.mp4"
+            saved.write_bytes(video.read_bytes())
+            return saved
+
+        # nothing saved: the standard defaults, and the page says where they came from
+        page = client.get("/runs").text
+        assert "3 clips, the planner decides" in page and "nothing saved yet" in page
+        assert "Paste a video or channel address" in page
+
+        with mock.patch.object(everygen.sources, "fetch", fetch):
+            started = client.post("/everygen", data={"url": "https://www.youtube.com/watch?v=abc123"},
+                                  follow_redirects=False)
+        assert started.status_code == 303 and started.headers["location"].startswith("/runs/")
+        run_id = started.headers["location"].rsplit("/", 1)[-1]
+        conn = db.connect(db_path)
+        raw = json.loads(conn.execute("SELECT config_json FROM runs WHERE id = ?", (run_id,)).fetchone()[0])
+        conn.close()
+        assert raw["clip_count"] == 3 and raw["reframe_mode"] is None
+        assert [a["platform"] for a in raw["connected_accounts"]] == list(config_platforms())
+        assert raw["voiceover"]["enabled"] is False and raw["posting_mode"] == "draft_for_approval"
+
+        # saved defaults are what the next one uses - the same ones a channel's fetch would use
+        client.post("/settings", data={"clip_count": "1", "framing": "fit",
+                                       "platforms": ["tiktok"], "voiceover": "on"})
+        assert "1 clips, the whole frame, TikTok, with narration - from your saved defaults" in client.get("/runs").text
+        with mock.patch.object(everygen.sources, "fetch", fetch):
+            second = client.post("/everygen", data={"url": "https://youtu.be/def456"}, follow_redirects=False)
+        conn = db.connect(db_path)
+        raw = json.loads(conn.execute(
+            "SELECT config_json FROM runs WHERE id = ?", (second.headers["location"].rsplit("/", 1)[-1],)
+        ).fetchone()[0])
+        conn.close()
+        assert raw["clip_count"] == 1 and raw["reframe_mode"] == "fit"
+        assert [a["platform"] for a in raw["connected_accounts"]] == ["tiktok"]
+        assert raw["voiceover"]["enabled"] is True
+
+        # a channel address takes its newest upload, and keeps whatever record that channel has
+        channel = sources.Channel("UCpartner0", "Partner stream")
+        uploads = [sources.Video("vid_new", "Tonight's best bit", "2026-10-18T09:00:00+00:00")]
+        with mock.patch.object(everygen.sources, "resolve", lambda url: channel), \
+                mock.patch.object(everygen.sources, "feed", lambda cid: uploads), \
+                mock.patch.object(everygen.sources, "fetch", fetch):
+            run_id, note = everygen.start(db_path, Path(tmp), 1, "@partner")
+        assert "newest upload on Partner stream" in note
+        conn = db.connect(db_path)
+        raw = json.loads(conn.execute("SELECT config_json FROM runs WHERE id = ?", (run_id,)).fetchone()[0])
+        conn.close()
+        assert raw["rights"]["basis"] == "none" and raw["rights"]["channel"] == "Partner stream"
+
+        # a file on disk needs no downloading at all
+        run_id, note = everygen.start(db_path, Path(tmp), 1, str(video))
+        assert "from the file you gave" in note
+
+        # and the daily cap is the daily cap
+        with mock.patch.dict(os.environ, {"SHORTS_RUNS_PER_DAY": "1"}):
+            capped = client.post("/everygen", data={"url": "https://youtu.be/ghi789"}, follow_redirects=False)
+        assert capped.headers["location"] == "/runs?error=cap"
+        assert "used today" in client.get("/runs?error=cap").text
+
+        # whatever was queued runs like any other run
+        from shorts.web import worker
+
+        worker.work(db_path, once=True)
+        conn = db.connect(db_path)
+        statuses = {row[0] for row in conn.execute("SELECT status FROM runs")}
+        conn.close()
+        assert statuses <= {"queued", "needs_review", "no_clips"}, statuses
+
+
+def config_platforms():
+    from shorts.config import PLATFORMS
+
+    return PLATFORMS
+
+
+def test_saved_defaults_are_kept_sane():
+    from shorts.web import settings
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        assert settings.defaults_for(db_path, 1) == settings.DEFAULTS
+
+        kept = settings.save(db_path, 1, {"clip_count": 99, "framing": "sideways",
+                                          "platforms": ["tiktok", "myspace"], "voiceover": True})
+        assert kept == {"platforms": ["tiktok"], "voiceover": True}, kept
+        settled = settings.defaults_for(db_path, 1)
+        assert settled["clip_count"] == 3 and settled["framing"] == "auto"  # nonsense ignored
+        assert settled["platforms"] == ["tiktok"]
+
+        # an empty platform list is not a way to end up posting nowhere
+        settings.save(db_path, 1, {"platforms": []})
+        assert settings.defaults_for(db_path, 1)["platforms"] == ["tiktok"]
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

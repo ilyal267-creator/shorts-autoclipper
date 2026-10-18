@@ -480,13 +480,13 @@ the top of Runs. The defaults live per tester (clips, framing, platforms, voices
 what happens when clips are ready) and are the same ones the daily automation uses.
 
 **Acceptance criteria:**
-- [ ] One command with only a URL produces drafts using the saved defaults
-- [ ] With nothing saved it uses the documented defaults and says which it used
-- [ ] The same defaults drive a manual run and the daily automation
+- [x] One command with only a URL produces drafts using the saved defaults
+- [x] With nothing saved it uses the documented defaults and says so on the page and in the command
+- [x] One builder makes every run config: the one-command run, a channel's fetch, and the form
 
 **Verification:**
-- [ ] `python tests/test_web.py`: defaults applied; the config matches the equivalent manual run
-- [ ] Manual: `everygen` on one video, start to finish
+- [x] `python tests/test_web.py`: defaults applied and saved, video and channel and file addresses, cap, nonsense settings ignored (23 checks)
+- [ ] Manual: `everygen` on one video end to end - waiting on a working key and yt-dlp
 
 **Dependencies:** T18 · **Files:** `shorts/web/sources.py`, `shorts/web/settings.py`, `shorts/__main__.py`, `tests/test_web.py` · **Scope:** M
 

@@ -14,6 +14,48 @@
     <button class="btn {% if paused %}btn-primary{% endif %}" type="submit">{{ "Resume posting" if paused else "Pause all posting" }}</button>
   </form>
 
+  <form class="setup-form defaults-form" method="post" action="/settings">
+    <div class="label">What a run does when you do not say otherwise</div>
+    <div class="field-row">
+      <div class="field">
+        <label class="label" for="clip_count">Clips</label>
+        <select class="input" id="clip_count" name="clip_count">
+          {% for n in range(1, 6) %}
+          <option value="{{ n }}" {% if n == defaults.clip_count %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <fieldset class="field grow">
+        <legend class="label">Framing</legend>
+        <div class="segmented">
+          {% for key, label in framings.items() %}
+          <label><input type="radio" name="framing" value="{{ key }}"
+            {% if defaults.framing == key %}checked{% endif %}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+    <fieldset class="field">
+      <legend class="label">Platforms</legend>
+      <div class="choice-grid">
+        {% for card in cards %}
+        <label class="choice">
+          <input type="checkbox" name="platforms" value="{{ card.platform }}"
+            {% if card.platform in defaults.platforms %}checked{% endif %}>
+          <span class="choice-body"><span class="choice-title">
+            <span class="dot dot-{{ card.platform }}"></span>{{ card.name }}</span></span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <label class="toggle-row">
+      <input type="checkbox" name="voiceover" class="switch" {% if defaults.voiceover %}checked{% endif %}>
+      <span>Narrate every clip, one voice per platform.</span>
+    </label>
+    <div class="submit-row"><button class="btn btn-primary" type="submit">Save defaults</button>
+      <span class="dim">{{ described }}</span></div>
+  </form>
+
   <div class="label">Where clips get posted</div>
   <div class="choice-grid account-grid">
     {% for card in cards %}

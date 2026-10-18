@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 
 from .. import config as config_mod, media, run as run_mod, sources
-from . import channels, connections, db, posting
+from . import channels, connections, db, posting, settings
 from .runs import limits, runs_started_today
 
 STAGES = ["probe", "transcribe", "plan", "copy", "compliance", "voiceover", "render", "deliver"]
@@ -119,25 +119,10 @@ def queue_from_channel(db_path, data_dir, source) -> str | None:
     if probe.audio_tracks == 0:
         raise sources.SourceError("that upload has no audio track to cut from")
 
-    platforms = sorted({
-        row["platform"] for row in connections.listed(db_path, source["user_id"])
-        if row["status"] == "ok"
-    }) or list(config_mod.PLATFORMS)
-    raw = {
-        "source_video": str(saved.resolve()),
-        "connected_accounts": [
-            {"platform": platform, "account_id": "pending", "handle": ""} for platform in platforms
-        ],
-        "clip_count": 3,
-        "clip_length_range": [15, 45],
-        # Automatic publishing is decided per clip once it exists (T22); a fetched upload
-        # always becomes drafts first, whatever the channel is allowed to do.
-        "posting_mode": "draft_for_approval",
-        "rights_confirmed": True,
-        "rights": channels.rights_of(source),
-        "voiceover": {"enabled": False, "disclose": True},
-        "output_dir": str((folder / "out").resolve()),
-    }
+    raw = settings.run_config(
+        db_path, source["user_id"], saved.resolve(), (folder / "out").resolve(),
+        channels.rights_of(source),
+    )
     config_mod.from_dict(raw)  # refuse here rather than when the worker picks it up
 
     conn = db.connect(db_path)

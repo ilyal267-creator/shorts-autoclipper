@@ -106,7 +106,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [x] T16: Find the hyped moments from the audio, not just the words
 - [x] T17: Rights record per channel
 - [x] T18: Watch a channel and fetch what is new
-- [ ] T19: Everygen: one command, start to finish
+- [x] T19: Everygen: one command, start to finish
 - [ ] T20: Script editor per clip, with re-record
 - [x] T21: Daily schedule, several channels and several accounts at once
 - [x] T22: Auto-publishing with its rails

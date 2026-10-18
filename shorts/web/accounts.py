@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from .. import auth as pipeline_auth
 from ..voice import DEFAULT_VOICES
-from . import connections, posting
+from . import connections, posting, settings
 from .runs import PLATFORM_NAMES, VOICE_NAMES
 
 STATE_COOKIE = "connect_state"
@@ -53,6 +53,11 @@ def register(app, page, public_url, secure_cookies) -> None:
             request, "accounts.html", nav="accounts", cards=cards,
             error=CONNECT_ERRORS.get(error),
             paused=posting.paused(app.state.db_path, user["id"]), cap=posting.cap(),
+            defaults=settings.defaults_for(app.state.db_path, user["id"]),
+            framings={
+                "auto": "Planner decides", "center_crop": "Crop to 9:16", "fit": "Fit whole frame",
+            },
+            described=settings.described(app.state.db_path, user["id"]),
         )
 
     @app.get("/connect/youtube")
@@ -94,6 +99,18 @@ def register(app, page, public_url, secure_cookies) -> None:
         )
         response.headers["location"] = "/accounts"
         return response
+
+    @app.post("/settings")
+    async def save_settings(request: Request):
+        """What every run starts from: the one-command run, and a channel's nightly fetch."""
+        form = await request.form()
+        settings.save(app.state.db_path, request.state.user["id"], {
+            "clip_count": form.get("clip_count", 3),
+            "framing": form.get("framing", "auto"),
+            "platforms": form.getlist("platforms"),
+            "voiceover": form.get("voiceover") == "on",
+        })
+        return RedirectResponse("/accounts", status_code=303)
 
     @app.get("/posts")
     def posts(request: Request):
