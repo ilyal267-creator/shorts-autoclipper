@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from .config import PLATFORMS, REFRAME_MODES, Config
@@ -88,7 +89,7 @@ def _call(schema: dict, user_prompt: str) -> dict:
 # --------------------------------------------------------------------------- transcript view
 
 
-def timeline(transcript: Transcript, chunk_seconds: float = 6.0, pause: float = 0.6) -> str:
+def timeline(transcript: Transcript, chunk_seconds: float = 6.0, pause: float = 0.6, peaks=()) -> str:
     """Speech in timed runs, with the silences between them called out.
 
     Each line carries both ends of its span, and a gap worth cutting appears as its own
@@ -117,7 +118,19 @@ def timeline(transcript: Transcript, chunk_seconds: float = 6.0, pause: float = 
         if end - start >= chunk_seconds:
             flush()
     flush()
+    for peak in peaks:  # the loud moments, filed in time order among the speech
+        after = next((i for i, line in enumerate(lines) if _line_at(line) > peak.start), len(lines))
+        lines.insert(after, peak.line())
     return "\n".join(lines)
+
+
+def _line_at(line: str) -> float:
+    """When a timeline line starts, for slotting a marker into place.
+
+    Every line carries a range, so read the range: a silence line leads with its *length*
+    ("silence 9.6s: 1.4-11.0") and the first number on it is not where it begins."""
+    found = re.search(r"(\d+(?:\.\d+)?)-\d", line)
+    return float(found.group(1)) if found else 0.0
 
 
 SNAP_TOLERANCE = 0.5
@@ -210,7 +223,7 @@ CLIP_SCHEMA = {
 }
 
 
-def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int) -> dict:
+def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int, peaks=()) -> dict:
     if provider() == "mock":
         return _mock_clips(cfg, transcript)
     lo, hi = cfg.clip_length_range
@@ -234,7 +247,16 @@ def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int) -> 
         "Reframe: `fit` keeps the whole frame at full width over a blurred fill of itself. "
         "Prefer it for screen recordings, slides and gameplay, where any 9:16 slice loses most "
         "of the picture; crop when a single speaker fills the frame.\n\n"
-        "Transcript:\n" + timeline(transcript)
+        + (
+            "Lines marked `(loud ...)` are where the recording itself got loud, fast or "
+            "full of reactions - laughter, a shout, the moment something lands. The words "
+            "alone cannot show you that. Treat them as places to look first, never as "
+            "clips in themselves: a loud moment with nothing said is noise, and a quiet "
+            "line can still be the best thing in the video.\n\n"
+            if peaks
+            else ""
+        )
+        + "Transcript:\n" + timeline(transcript, peaks=peaks)
     )
     return _call(CLIP_SCHEMA, prompt)
 

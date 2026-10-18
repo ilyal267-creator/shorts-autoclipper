@@ -676,6 +676,67 @@ def test_a_draft_publishes_later_with_the_account_it_is_given():
             assert sent == []
 
 
+def test_hype_finds_the_loud_moment_and_leaves_a_flat_recording_alone():
+    import shutil
+    import subprocess
+    import tempfile
+
+    from shorts import hype
+
+    # scoring, with no ffmpeg involved: a quiet room, one burst at 10-14s
+    quiet = [-30.0] * 30
+    loud = list(quiet)
+    for second in range(10, 14):
+        loud[second] = -12.0
+    peaks = hype.find(loud)
+    assert len(peaks) == 1, peaks
+    assert (peaks[0].start, peaks[0].end) == (10.0, 14.0), peaks[0]
+    assert "dB" in peaks[0].why
+    assert hype.find(quiet) == []  # nothing stands out: say nothing rather than invent a peak
+    assert hype.find([-30.0, -12.0]) == []  # a single second is a door slam, not a moment
+
+    # what is said counts too: the same loudness, but someone reacting
+    words = [Word("wow", 10.2, 10.5), Word("insane", 10.6, 11.0)]
+    spoken = hype.find(loud, words)[0]
+    assert "reaction" in spoken.why and spoken.score > peaks[0].score
+    assert hype.lines([spoken]).startswith("(loud 10.0-14.0:")
+
+    # a marker is filed among the speech at the right place in the timeline
+    from shorts import agent
+    from shorts.transcribe import Transcript
+
+    transcript = Transcript(
+        words=[Word("one", 1.0, 1.4), Word("two", 11.0, 11.4), Word("three", 20.0, 20.4)],
+        language="en", duration=30.0, source="test",
+    )
+    timeline = agent.timeline(transcript, peaks=[hype.Peak(10.0, 14.0, 3.0, "+18dB")])
+    rows = timeline.splitlines()
+    assert any(row.startswith("(loud 10.0-14.0") for row in rows), rows
+    starts = [agent._line_at(row) for row in rows]
+    assert starts == sorted(starts), rows
+
+    # and the reading itself, against a real file: 20s of quiet tone with a loud burst at 8-12s
+    if not shutil.which("ffmpeg"):
+        print("    (skipped the ffmpeg half: not on PATH)")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "burst.mp4"
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", "color=c=black:s=320x240:r=10:d=20",
+             "-f", "lavfi", "-i", "sine=frequency=200:duration=20",
+             "-f", "lavfi", "-i", "sine=frequency=600:duration=4",
+             "-filter_complex",
+             "[1:a]volume=-26dB[bed];[2:a]volume=0dB,adelay=8000|8000[hit];[bed][hit]amix=inputs=2:duration=first[a]",
+             "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "ultrafast",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path)],
+            check=True,
+        )
+        heard = hype.of(str(path))
+        assert heard, "a 4-second burst 14dB over the bed should be heard"
+        assert abs(heard[0].start - 8.0) <= 1.0 and abs(heard[0].end - 12.0) <= 1.5, heard[0]
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

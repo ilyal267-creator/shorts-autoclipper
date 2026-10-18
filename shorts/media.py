@@ -130,6 +130,14 @@ def extract_audio(video: str, track: int, out_path: str) -> str:
     return out_path
 
 
+def run_logged(cmd: list[str]) -> str:
+    """Run ffmpeg for what it *prints*: filters like astats report on stderr, not stdout."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise MediaError("%s failed: %s" % (cmd[0], result.stderr.strip()[-800:]))
+    return result.stderr
+
+
 def run(cmd: list[str]) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:

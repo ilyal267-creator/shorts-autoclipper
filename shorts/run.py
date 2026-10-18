@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import agent, compliance, media, publish as publishing, render as rendering
+from . import agent, compliance, hype, media, publish as publishing, render as rendering
 from .clips import (
     Clip,
     duplicate_copy,
@@ -96,8 +96,14 @@ class Run:
         self.transcript = transcript
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))
 
+        peaks = hype.of(cfg.source_video, cfg.audio_track, transcript.words)
+        if peaks:
+            self.note(
+                "loud moments: %s"
+                % ", ".join("%.0f-%.0fs" % (peak.start, peak.end) for peak in peaks[:5])
+            )
         self.note("choosing clips", stage="plan")
-        plan = agent.plan_clips(cfg, transcript, probe.width, probe.height)
+        plan = agent.plan_clips(cfg, transcript, probe.width, probe.height, peaks)
         if plan.get("notes"):
             self.note("selection notes: %s" % plan["notes"])
         self.excluded.extend(plan.get("excluded_segments", []))
