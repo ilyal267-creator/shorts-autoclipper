@@ -79,6 +79,29 @@
       {% if c.attribution %}<p class="small dim">Caption credit: “{{ c.attribution }}”</p>{% endif %}
       {% if c.paused_reason %}<p class="small warn">Paused: {{ c.paused_reason }}</p>{% endif %}
 
+      {% if c.style %}
+      <details class="style-box">
+        <summary class="small">Style learned{% if c.style_learned_at %} · {{ c.style_learned_at[:10] }}{% endif %}</summary>
+        <p class="small"><strong>Topics:</strong> {{ c.style.topics|join(", ") }}</p>
+        <p class="small"><strong>Hooks:</strong> {{ c.style.hook_shapes|join(" · ") }}</p>
+        <p class="small"><strong>Format:</strong> {{ c.style.format }}</p>
+        <p class="small"><strong>Pace:</strong> {{ c.style.pacing }}</p>
+        <p class="small"><strong>For:</strong> {{ c.style.audience }}</p>
+        <p class="small dim"><strong>Avoid:</strong> {{ c.style.avoid|join(" · ") }}</p>
+        <p class="small"><strong>Ideas:</strong></p>
+        <ul class="small">{% for idea in c.style.ideas %}<li>{{ idea }}</li>{% endfor %}</ul>
+      </details>
+      {% if c.borrowed %}
+      <p class="small warn">Check this: {{ c.borrowed|join("; ") }}. Generated videos must not carry the identity of the channel they were modelled on.</p>
+      {% endif %}
+      {% endif %}
+
+      <form method="post" action="/channels/{{ c.id }}/style" class="field">
+        <input class="input" name="notes" value="{{ c.style_notes or '' }}"
+          placeholder="In a sentence: what makes this channel work?">
+        <button class="btn" type="submit">{{ "Learn the style again" if c.style else "Learn the style" }}</button>
+      </form>
+
       <form method="post" action="/channels/{{ c.id }}/cadence" class="cadence-row">
         <label class="small dim" for="cadence-{{ c.id }}">Look for new uploads</label>
         <select class="input" id="cadence-{{ c.id }}" name="cadence_minutes" onchange="this.form.submit()">

@@ -284,3 +284,9 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .everygen-row .input { flex-grow: 1; }
 .everygen p { margin: 8px 0 0; }
 .defaults-form { max-width: 720px; margin-bottom: 28px; }
+
+.style-box { border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px; }
+.style-box summary { cursor: pointer; color: var(--accent); }
+.style-box p { margin: 8px 0 0; line-height: 1.45; }
+.style-box ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.5; }
+.account-card form.field { display: flex; flex-direction: column; gap: 8px; }

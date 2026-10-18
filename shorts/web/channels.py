@@ -11,10 +11,12 @@ That is the whole difference between a clipping partnership and reposting someon
 
 from __future__ import annotations
 
+import json
+
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from .. import sources
+from .. import sources, style
 from . import connections, db
 
 OWNED, PERMITTED, NONE = "owned", "permitted", "none"
@@ -193,6 +195,14 @@ def register(app, page) -> None:
                 "rules": row["rules"],
                 "last_checked_at": row["last_checked_at"],
                 "cadence_minutes": row["cadence_minutes"],
+                "style": json.loads(row["style_json"]) if row["style_json"] else None,
+                "style_notes": row["style_notes"],
+                "style_learned_at": row["style_learned_at"],
+                "borrowed": (
+                    style.borrowed_identity(
+                        json.loads(row["style_json"]), row["title"] or "", [row["url"]]
+                    ) if row["style_json"] else []
+                ),
                 "cadence": CADENCES.get(row["cadence_minutes"], "%d minutes" % row["cadence_minutes"]),
             })
         return page(
@@ -253,6 +263,31 @@ def register(app, page) -> None:
             with conn:
                 conn.execute(
                     "UPDATE channel_sources SET auto_publish = ? WHERE id = ?", (1 if wanted else 0, source_id)
+                )
+        finally:
+            conn.close()
+        return RedirectResponse("/channels", status_code=303)
+
+    @app.post("/channels/{source_id}/style")
+    async def learn_style(request: Request, source_id: int):
+        """Read the formula behind this channel from its public titles. No video is fetched."""
+        row = owned_source(app.state.db_path, source_id, request.state.user["id"])
+        form = await request.form()
+        notes = str(form.get("notes", "")).strip()[:600]
+        try:
+            videos = sources.feed(row["channel_id"])
+        except sources.SourceError as exc:
+            trouble(app.state.db_path, source_id, str(exc), exc.pause)
+            return RedirectResponse("/channels?error=unreachable", status_code=303)
+        evidence = style.gather(row["title"] or row["channel_id"], videos, notes)
+        profile = style.learn(evidence)
+        conn = db.connect(app.state.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    """UPDATE channel_sources SET style_json = ?, style_notes = ?,
+                       style_learned_at = datetime('now') WHERE id = ?""",
+                    (style.as_json(profile), notes, source_id),
                 )
         finally:
             conn.close()

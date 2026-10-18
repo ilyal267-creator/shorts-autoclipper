@@ -1024,6 +1024,47 @@ def test_a_real_generation_polls_and_fails_honestly():
             assert "refused the credentials" in str(exc)
 
 
+def test_a_style_profile_is_a_formula_not_an_identity():
+    from shorts import style
+
+    class V:
+        def __init__(self, title, published):
+            self.title, self.published = title, published
+
+    videos = [
+        V("Wheels on the Camper | Family Camping Trip", "2026-10-18T09:00:00+00:00"),
+        V("BIG vs Small Pumpkins! Halloween Counting Fun", "2026-10-16T09:00:00+00:00"),
+        V("Fire Trucks for Kids | Play Pretend and Sing", "2026-10-11T09:00:00+00:00"),
+        V("nothing parseable here", "not a date"),
+    ]
+    evidence = style.gather("Rhyme Town", videos, notes="  short songs, bright colours  ")
+    assert evidence.titles[0].startswith("Wheels") and len(evidence.titles) == 4
+    assert evidence.span_days == 7 and evidence.per_week == 3.0  # the unparseable date is skipped
+    assert evidence.notes == "short songs, bright colours"
+
+    # the guardrail: a profile that carries the modelled channel's identity is caught
+    clean = {"topics": ["nursery rhymes"], "hook_shapes": ["a question, then a reversal"],
+             "format": "song, three verses, payoff", "pacing": "40 seconds", "audience": "toddlers",
+             "avoid": ["do not copy any character design"], "ideas": ["counting song about pumpkins"]}
+    assert style.borrowed_identity(clean, "Rhyme Town") == []
+    borrowed = {**clean, "ideas": ["a Rhyme Town style counting song"], "format": "like rhymetown does it"}
+    caught = style.borrowed_identity(borrowed, "Rhyme Town", ["https://youtube.com/@rhymetown"])
+    assert len(caught) == 2 and any("ideas" in c for c in caught) and any("format" in c for c in caught)
+
+    # ordinary words in a channel name must not match everything
+    assert style.borrowed_identity(clean, "The Daily Show Channel") == []
+    # half a channel name is a category nobody owns: flagging it would flag every honest profile
+    assert style.borrowed_identity(clean, "Rhymeworld - Nursery Rhymes for Kids") == []
+    assert style.borrowed_identity({**clean, "topics": ["rhymeworld songs"]},
+                                   "Rhymeworld - Nursery Rhymes for Kids")
+
+    # with no model, the profile says so loudly rather than pretending to be a formula
+    os.environ["SHORTS_PROVIDER"] = "mock"
+    mocked = style.learn(evidence)
+    assert "[MOCK]" in mocked["format"] and any("must not be used" in a for a in mocked["avoid"])
+    assert set(mocked) == set(style.PROFILE_SCHEMA["required"])
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"

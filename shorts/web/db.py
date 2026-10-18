@@ -162,6 +162,12 @@ MIGRATIONS = [
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     """,
+    """
+    -- the formula behind a channel: topics, hook shapes, pace. Not its identity.
+    ALTER TABLE channel_sources ADD COLUMN style_json TEXT;
+    ALTER TABLE channel_sources ADD COLUMN style_notes TEXT;
+    ALTER TABLE channel_sources ADD COLUMN style_learned_at TEXT;
+    """,
 ]
 
 
