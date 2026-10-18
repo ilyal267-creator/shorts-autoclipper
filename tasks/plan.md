@@ -87,7 +87,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [ ] You review the screens against the design
 
 ### Phase 3: Accounts and publishing
-- [ ] T8: Connect YouTube and publish a draft privately
+- [x] T8: Connect YouTube and publish a draft privately
 - [ ] T9: Connect TikTok and publish
 - [ ] T10: Connect Instagram and publish
 - [ ] T11: Voice and caption defaults

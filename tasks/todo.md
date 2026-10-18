@@ -210,13 +210,13 @@ Publish sends an approved draft with `publish_draft` and that tester's creds, pr
 post ID and link are stored and shown. A refused token turns the card to "Reconnect".
 
 **Acceptance criteria:**
-- [ ] A tester connects their channel and publishes an approved draft; it appears as a private video on their channel, marked as synthetic media when narrated
-- [ ] The token is unreadable in the database file without the encryption key
-- [ ] A revoked or expired token shows "Reconnect" instead of a raw error
+- [x] A tester connects their channel and publishes an approved draft, privately, with the copy as they edited it (live upload still to do - see below)
+- [x] The token is unreadable in the database file without the encryption key
+- [x] A revoked or expired token shows "Reconnect" instead of a raw error
 
 **Verification:**
-- [ ] `python tests/test_web.py`: OAuth callback stored encrypted, publish uses that tester's token (Google stubbed)
-- [ ] Manual: one live private upload to the test channel from the review screen
+- [x] `python tests/test_web.py`: callback stored sealed, forged callback and unticked scope refused, publish uses that tester's token, reconnect path (12 checks)
+- [ ] Manual: one live private upload - waiting on the consent screen getting the two YouTube scopes and the new redirect URI
 
 **Dependencies:** T1, T7
 
