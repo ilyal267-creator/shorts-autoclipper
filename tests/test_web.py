@@ -590,6 +590,150 @@ def test_publishing_a_draft_uses_this_testers_own_channel():
         assert "stopped working" in client.get("/accounts").text
 
 
+def test_a_channel_may_be_clipped_only_on_ownership_or_permission():
+    from shorts import sources
+    from shorts.web import channels
+
+    def resolving(mapping):
+        def resolve(url):
+            key = url.strip().lower()
+            if key not in mapping:
+                raise sources.SourceError("not a channel")
+            channel_id, title = mapping[key]
+            return sources.Channel(channel_id, title)
+        return resolve
+
+    known = {
+        "@mine": ("UCmine", "My channel"),
+        "@partner": ("UCpartner", "Partner stream"),
+        "@stranger": ("UCstranger", "Someone else"),
+        "https://www.youtube.com/@second": ("UCsecond", "Second partner"),
+    }
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        connect_youtube(client, channel_id="UCmine", handle="My channel")
+
+        # no permission ticked: everything that is not yours lands with no rights on file
+        with mock.patch.object(channels.sources, "resolve", resolving(known)):
+            client.post("/channels", data={"urls": "@mine\n@stranger\nnot a channel at all"})
+        page = client.get("/channels").text
+        assert "Your own channel" in page and "No rights on file" in page
+        assert "Clips from here stop in Review" in page
+
+        rows = {row["channel_id"]: row for row in channels.listed(db_path, 1)}
+        assert set(rows) == {"UCmine", "UCstranger"}, list(rows)
+        assert rows["UCmine"]["rights"] == "owned" and rows["UCstranger"]["rights"] == "none"
+
+        # ownership is not something the form can claim: it is checked against the connection
+        with mock.patch.object(channels.sources, "resolve", resolving(known)):
+            client.post("/channels", data={"urls": "@stranger", "has_permission": "no",
+                                           "granted_by": "me", "granted_at": "2026-10-18", "evidence": "trust me"})
+        assert channels.listed(db_path, 1)[0]["rights"] in ("none", "owned")
+        assert {r["channel_id"]: r["rights"] for r in channels.listed(db_path, 1)}["UCstranger"] == "none"
+
+        # permission needs a who, a when and a where - a bare tick is refused
+        with mock.patch.object(channels.sources, "resolve", resolving(known)):
+            thin = client.post("/channels", data={"urls": "@partner", "has_permission": "yes",
+                                                  "granted_by": "", "granted_at": "", "evidence": ""},
+                               follow_redirects=False)
+        assert thin.headers["location"] == "/channels?error=permission"
+        assert "needs a name, a date" in client.get("/channels?error=permission").text
+        assert "UCpartner" not in {r["channel_id"] for r in channels.listed(db_path, 1)}
+
+        # with the record filled in, two partners can be added at once under one permission
+        with mock.patch.object(channels.sources, "resolve", resolving(known)):
+            client.post("/channels", data={
+                "urls": "@partner\nhttps://www.youtube.com/@second", "has_permission": "yes",
+                "granted_by": "Dana Reed, channel manager", "granted_at": "2026-10-17",
+                "evidence": "email: Re: clipping programme", "rules": "no sponsor segments",
+                "attribution": "Clipped from @partner with permission",
+            })
+        rows = {row["channel_id"]: row for row in channels.listed(db_path, 1)}
+        assert rows["UCpartner"]["rights"] == "permitted" and rows["UCsecond"]["rights"] == "permitted"
+        assert rows["UCpartner"]["granted_by"].startswith("Dana Reed")
+        assert "no sponsor segments" in client.get("/channels").text
+
+        # the gate: only ownership or permission may post by itself, and the server says so
+        stranger_id, partner_id = rows["UCstranger"]["id"], rows["UCpartner"]["id"]
+        blocked = client.post("/channels/%d/auto" % stranger_id, data={"auto_publish": "yes"}, follow_redirects=False)
+        assert blocked.headers["location"] == "/channels?error=auto_blocked"
+        assert channels.listed(db_path, 1) and not any(r["auto_publish"] for r in channels.listed(db_path, 1))
+        client.post("/channels/%d/auto" % partner_id, data={"auto_publish": "yes"})
+        assert {r["channel_id"]: r["auto_publish"] for r in channels.listed(db_path, 1)}["UCpartner"] == 1
+
+        # pausing, removing, and another tester's channels are not mine to touch
+        client.post("/channels/%d/pause" % partner_id)
+        assert "Resume" in client.get("/channels").text
+        other, _ = app_client(tmp)
+        auth.invite(db_path, "other@example.com")
+        sign_in(other, "other@example.com")
+        assert other.get("/channels").text.count("account-card") == 0
+        for path in ("auto", "pause", "remove"):
+            assert other.post("/channels/%d/%s" % (partner_id, path), data={"auto_publish": "yes"},
+                              follow_redirects=False).status_code == 404
+        client.post("/channels/%d/remove" % stranger_id)
+        assert "UCstranger" not in {r["channel_id"] for r in channels.listed(db_path, 1)}
+
+
+def test_the_rights_record_travels_with_the_run():
+    from shorts import compliance, config as config_mod
+    from shorts.web import channels
+
+    base = {
+        "source_video": "x.mp4",
+        "connected_accounts": [{"platform": "tiktok", "account_id": "a", "handle": "@x"}],
+        "rights_confirmed": True,
+    }
+    permitted = {"basis": "permitted", "channel": "Partner stream", "granted_by": "Dana Reed",
+                 "granted_at": "2026-10-17", "evidence": "email: Re: clipping programme"}
+
+    cfg = config_mod.from_dict({**base, "rights": permitted})
+    assert cfg.rights["granted_by"] == "Dana Reed"
+    verdict = compliance.check(cfg, "words", {}, {"verdict": "pass"})
+    assert verdict.ok and any("with permission from Dana Reed" in flag for flag in verdict.flags)
+
+    bare = config_mod.from_dict({**base, "rights": {"basis": "none", "channel": "Someone else"}})
+    verdict = compliance.check(bare, "words", {}, {"verdict": "pass"})
+    assert verdict.ok, verdict.reasons  # still clippable into drafts
+    assert any("must not be posted automatically" in flag for flag in verdict.flags)
+
+    # an upload the tester made themselves carries no channel record and is not nagged about one
+    own = config_mod.from_dict(base)
+    assert not any("rights record" in flag for flag in compliance.check(own, "words", {}, {"verdict": "pass"}).flags)
+
+    # and what the page shows is what the run would carry
+    row = {
+        "rights": "permitted", "title": "Partner stream", "channel_id": "UCpartner",
+        "granted_by": "Dana Reed", "granted_at": "2026-10-17", "evidence": "email",
+        "attribution": "Clipped with permission", "auto_publish": 1,
+    }
+    record = channels.rights_of(row)
+    assert record["may_auto_publish"] is True
+    assert channels.rights_of({**row, "rights": "none"})["may_auto_publish"] is False
+
+
+def test_a_partners_credit_line_is_added_to_the_caption():
+    from shorts.web import channels, review
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        conn = db.connect(db_path)
+        with conn:
+            conn.execute(
+                """INSERT INTO channel_sources (id, user_id, channel_id, url, title, rights, attribution)
+                   VALUES (7, 1, 'UCpartner', 'u', 'Partner stream', 'permitted', 'Clipped from @partner with permission')"""
+            )
+        with_source = conn.execute("SELECT 7 AS source_id").fetchone()
+        conn.close()
+
+        said = review.with_credit(db_path, with_source, 'Cut scope, not corners.')
+        assert said.endswith('Clipped from @partner with permission')
+        # never twice, and never on a clip that did not come from a partner channel
+        assert review.with_credit(db_path, with_source, said) == said
+        assert review.with_credit(db_path, {'source_id': None}, 'as is') == 'as is'
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

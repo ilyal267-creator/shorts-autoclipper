@@ -104,7 +104,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 
 ### Phase 5: channel automation (added 18 October 2026)
 - [x] T16: Find the hyped moments from the audio, not just the words
-- [ ] T17: Rights record per channel
+- [x] T17: Rights record per channel
 - [x] T18: Watch a channel and fetch what is new
 - [ ] T19: Everygen: one command, start to finish
 - [ ] T20: Script editor per clip, with re-record

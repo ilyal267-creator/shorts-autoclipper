@@ -49,6 +49,10 @@ class Config:
     language: str | None = None
     # §4.5 rights: passed into the run, never inferred.
     rights_confirmed: bool = False
+    # Where the footage came from and what entitles this run to it:
+    # {"basis": "owned"|"permitted"|"none", "channel": ..., "granted_by": ..., "granted_at": ...,
+    #  "evidence": ..., "attribution": ...}. Empty for a file somebody uploaded themselves.
+    rights: dict = field(default_factory=dict)
     third_party_music: bool = False
     # Which audio stream to cut from: game capture, mic and desktop are often separate tracks.
     audio_track: int = 0
@@ -136,6 +140,7 @@ def from_dict(raw: dict) -> Config:
         content_policy=raw.get("content_policy") or {},
         language=raw.get("language"),
         rights_confirmed=bool(raw.get("rights_confirmed", False)),
+        rights=raw.get("rights") or {},
         third_party_music=bool(raw.get("third_party_music", False)),
         audio_track=int(raw.get("audio_track", 0)),
         reframe_mode=raw.get("reframe_mode") or None,

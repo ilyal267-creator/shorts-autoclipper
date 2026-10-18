@@ -395,6 +395,7 @@ class Run:
             "source_video": self.cfg.source_video,
             "generated_by": provider,
             "posting_mode": self.cfg.posting_mode,
+            "rights": self.cfg.rights,  # what entitled this run to the footage
             "voices": self.voices,  # platform -> ElevenLabs voice id; empty when not narrated
             "clips": clips,
             "excluded_segments": self.excluded,

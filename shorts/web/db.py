@@ -97,6 +97,33 @@ MIGRATIONS = [
     ALTER TABLE clip_versions ADD COLUMN published_at TEXT;
     ALTER TABLE clip_versions ADD COLUMN publish_error TEXT;
     """,
+    """
+    -- a channel this tester may clip, and what says so
+    CREATE TABLE channel_sources (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        channel_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        title TEXT,
+        -- owned: its id matches a connected account, checked here, never typed in.
+        -- permitted: the owner said yes, and who/when/where is on file.
+        -- none: clips go to review and nothing posts by itself.
+        rights TEXT NOT NULL DEFAULT 'none',
+        granted_by TEXT,
+        granted_at TEXT,
+        evidence TEXT,
+        rules TEXT,
+        attribution TEXT,
+        auto_publish INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        paused_reason TEXT,
+        last_video_id TEXT,
+        last_checked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (user_id, channel_id)
+    );
+    ALTER TABLE runs ADD COLUMN source_id INTEGER REFERENCES channel_sources(id) ON DELETE SET NULL;
+    """,
 ]
 
 

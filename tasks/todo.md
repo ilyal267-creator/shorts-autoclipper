@@ -440,13 +440,13 @@ neither. Stored with the source, shown on its card, copied into every run that c
 read by the compliance stage. Auto-publishing is refused without one — by the server, not the form.
 
 **Acceptance criteria:**
-- [ ] A source with no rights record cannot be set to auto-publish, through the form or by posting straight to the endpoint
-- [ ] Ownership is checked against the connected YouTube account, never typed in
-- [ ] Each run's summary carries the rights record it ran under
+- [x] A source with no rights record cannot be set to auto-publish, through the form or by posting straight to the endpoint
+- [x] Ownership is checked against the connected YouTube account, never typed in
+- [x] Each run's summary carries the rights record it ran under, and compliance names the permission or says there is none
 
 **Verification:**
-- [ ] `python tests/test_web.py`: all three records, the refusal path, summary contents
-- [ ] Manual: a permitted channel and a bare one side by side on the sources page
+- [x] `python tests/test_web.py`: all three records, bulk add, the refusal path, the gate, cross-tester access, the credit line (15 checks)
+- [x] Manual: the Channels page renders with its permission form; adding real channels is yours to do, since it records a claim in your name
 
 **Dependencies:** T8 (YouTube connection, for ownership) · **Files:** `shorts/web/sources.py`, `shorts/web/db.py`, `shorts/compliance.py`, `tests/test_web.py` · **Scope:** M
 

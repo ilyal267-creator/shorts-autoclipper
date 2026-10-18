@@ -66,6 +66,19 @@ def check(cfg: Config, clip_text: str, copy: dict, model_verdict: dict) -> Verdi
     # §4.5 rights — asserted by the caller, never inferred from the video.
     if not cfg.rights_confirmed:
         reasons.append("rights to the source video were not confirmed for this run")
+    # Footage from somebody else's channel: what entitles this run to it travels with the run.
+    basis = (cfg.rights or {}).get("basis")
+    if cfg.rights and basis not in ("owned", "permitted"):
+        flags.append(
+            "%s has no rights record - these clips are drafts for a person to decide on, and must not be posted automatically" % (cfg.rights.get("channel") or "that channel")
+        )
+    elif basis == "permitted":
+        flags.append(
+            "clipped with permission from %s (%s), kept at: %s"
+            % (cfg.rights.get("granted_by") or "the owner", cfg.rights.get("granted_at") or "undated",
+               cfg.rights.get("evidence") or "not recorded")
+        )
+
     if cfg.third_party_music:
         flags.append(
             "source contains third-party music not covered by a platform sound library — "

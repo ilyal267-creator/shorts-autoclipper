@@ -11,7 +11,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ..run import publish_draft
-from . import connections, db
+from . import channels, connections, db
 from .runs import PLATFORM_NAMES, VOICE_NAMES, duration_text, hide_paths, owned_run
 
 # What each platform accepts: longer copy is cut off or refused when it posts.
@@ -91,6 +91,28 @@ def flags_for(summary: dict) -> tuple[list[str], dict]:
         platform = next((p for p in PLATFORM_NAMES if p in text), None)
         per_clip.setdefault((clip_id, platform), []).append(hide_paths(text))
     return general, per_clip
+
+
+def with_credit(db_path, run, caption: str) -> str:
+    """Append the partner's credit line, if their channel asked for one.
+
+    A clipping partnership usually comes with one condition: say whose it is. Leaving that
+    to whoever is clicking Publish is how it gets forgotten, so it rides with the channel
+    record instead."""
+    source_id = run["source_id"] if "source_id" in run.keys() else None
+    if not source_id:
+        return caption
+    conn = db.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT attribution FROM channel_sources WHERE id = ?", (source_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    credit = (row["attribution"] or "").strip() if row else ""
+    if not credit or credit.lower() in (caption or "").lower():
+        return caption
+    return ((caption or "").rstrip() + "\n\n" + credit).strip()
 
 
 def register(app, page) -> None:
@@ -257,6 +279,7 @@ def register(app, page) -> None:
             "title": row["title"], "caption": row["caption"],
             "hashtags": json.loads(row["hashtags_json"]),
         })
+        entry["caption"] = with_credit(app.state.db_path, run, entry["caption"])
         result = publish_draft(
             entry, platform, account["account_id"], creds,
             dry_run=os.getenv("SHORTS_DRY_RUN") == "1",
