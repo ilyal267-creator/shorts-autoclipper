@@ -131,6 +131,29 @@ MIGRATIONS = [
     -- one switch per tester that stops all posting, mid-run included
     ALTER TABLE users ADD COLUMN posting_paused_at TEXT;
     """,
+    """
+    -- how often to look at a channel; daily by default
+    ALTER TABLE channel_sources ADD COLUMN cadence_minutes INTEGER NOT NULL DEFAULT 1440;
+    -- one row per account a clip actually reached, because a clip can reach several
+    CREATE TABLE posts (
+        id INTEGER PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        clip_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        post_id TEXT,
+        post_url TEXT,
+        error TEXT,
+        published_at TEXT,
+        published_by TEXT,
+        UNIQUE (run_id, clip_id, platform, account_id)
+    );
+    INSERT INTO posts (run_id, clip_id, platform, account_id, post_id, post_url,
+                       published_at, published_by)
+        SELECT run_id, clip_id, platform, COALESCE(account_id, ''), post_id, post_url,
+               published_at, COALESCE(published_by, 'tester')
+        FROM clip_versions WHERE published_at IS NOT NULL;
+    """,
 ]
 
 

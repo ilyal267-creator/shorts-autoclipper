@@ -116,18 +116,25 @@ def add(db_path, user_id: int, channel, rights: str, permission: dict) -> int:
         conn.close()
 
 
-def due(db_path, every_minutes: int = 60) -> list:
-    """Active channels nobody has looked at for a while, longest-waiting first."""
+CADENCES = {60: "Hourly", 360: "Every 6 hours", 1440: "Daily", 10080: "Weekly"}
+
+
+def due(db_path, every_minutes: int | None = None) -> list:
+    """Channels whose own cadence says it is time, longest-waiting first.
+
+    `every_minutes` overrides every channel's cadence, which is only for tests and for a
+    worker told to sweep everything now."""
     conn = db.connect(db_path)
     try:
         return conn.execute(
             """SELECT * FROM channel_sources
                WHERE active = 1
                  AND (last_checked_at IS NULL
-                      OR last_checked_at <= datetime('now', ?))
+                      OR last_checked_at <= datetime('now', '-' || ? || ' minutes')
+                      OR last_checked_at <= datetime('now', '-' || cadence_minutes || ' minutes'))
                ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
                LIMIT 20""",
-            ("-%d minutes" % every_minutes,),
+            (every_minutes if every_minutes is not None else 10 ** 6,),
         ).fetchall()
     finally:
         conn.close()
@@ -185,10 +192,12 @@ def register(app, page) -> None:
                 "paused_reason": row["paused_reason"],
                 "rules": row["rules"],
                 "last_checked_at": row["last_checked_at"],
+                "cadence_minutes": row["cadence_minutes"],
+                "cadence": CADENCES.get(row["cadence_minutes"], "%d minutes" % row["cadence_minutes"]),
             })
         return page(
             request, "channels.html", nav="channels", channels=rows,
-            connected=len(mine), error=ERRORS.get(error),
+            connected=len(mine), error=ERRORS.get(error), cadences=CADENCES,
         )
 
     @app.post("/channels")
@@ -244,6 +253,27 @@ def register(app, page) -> None:
             with conn:
                 conn.execute(
                     "UPDATE channel_sources SET auto_publish = ? WHERE id = ?", (1 if wanted else 0, source_id)
+                )
+        finally:
+            conn.close()
+        return RedirectResponse("/channels", status_code=303)
+
+    @app.post("/channels/{source_id}/cadence")
+    async def set_cadence(request: Request, source_id: int):
+        owned_source(app.state.db_path, source_id, request.state.user["id"])
+        form = await request.form()
+        try:
+            minutes = int(form.get("cadence_minutes", 1440))
+        except ValueError:
+            return RedirectResponse("/channels", status_code=303)
+        if minutes not in CADENCES:
+            return RedirectResponse("/channels", status_code=303)
+        conn = db.connect(app.state.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE channel_sources SET cadence_minutes = ? WHERE id = ?",
+                    (minutes, source_id),
                 )
         finally:
             conn.close()

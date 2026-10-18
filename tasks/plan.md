@@ -108,7 +108,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [x] T18: Watch a channel and fetch what is new
 - [ ] T19: Everygen: one command, start to finish
 - [ ] T20: Script editor per clip, with re-record
-- [ ] T21: Daily schedule, several channels and several accounts at once
+- [x] T21: Daily schedule, several channels and several accounts at once
 - [x] T22: Auto-publishing with its rails
 
 ### Checkpoint 5: a day on its own

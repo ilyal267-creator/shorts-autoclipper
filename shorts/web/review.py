@@ -267,11 +267,11 @@ def register(app, page) -> None:
         if posting.paused(app.state.db_path, user["id"]):
             return back(run_id, clip_id, platform, "paused")
         entry["caption"] = with_credit(app.state.db_path, run, entry["caption"])
-        result, _ = posting.send(
+        results, _ = posting.send(
             app.state.db_path, app.state.data_dir, user["id"], run_id, clip_id, platform,
             entry, row, by="tester",
         )
-        if result is None:
+        if results is None:
             return back(run_id, clip_id, platform, "not_connected")
         return back(run_id, clip_id, platform)
 

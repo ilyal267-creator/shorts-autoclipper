@@ -79,6 +79,16 @@
       {% if c.attribution %}<p class="small dim">Caption credit: “{{ c.attribution }}”</p>{% endif %}
       {% if c.paused_reason %}<p class="small warn">Paused: {{ c.paused_reason }}</p>{% endif %}
 
+      <form method="post" action="/channels/{{ c.id }}/cadence" class="cadence-row">
+        <label class="small dim" for="cadence-{{ c.id }}">Look for new uploads</label>
+        <select class="input" id="cadence-{{ c.id }}" name="cadence_minutes" onchange="this.form.submit()">
+          {% for minutes, label in cadences.items() %}
+          <option value="{{ minutes }}" {% if minutes == c.cadence_minutes %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button class="btn" type="submit">Save</button></noscript>
+      </form>
+
       <form method="post" action="/channels/{{ c.id }}/auto" class="toggle-row">
         <input type="hidden" name="auto_publish" value="{{ 'no' if c.auto_publish else 'yes' }}">
         <button class="btn" type="submit" {% if not c.may_auto %}disabled title="Needs ownership or permission on file"{% endif %}>

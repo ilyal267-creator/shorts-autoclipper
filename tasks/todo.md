@@ -521,13 +521,13 @@ fans out to several accounts with spacing between them. A sources page lists the
 last video, next check and a pause switch.
 
 **Acceptance criteria:**
-- [ ] Ten channels pasted at once become ten sources sharing one preset
-- [ ] A daily source is checked once a day; a paused one is not checked at all
-- [ ] One clip posts to three accounts on the same platform, spaced, each logged separately
+- [x] Ten channels pasted at once become ten sources sharing one permission record
+- [x] A daily source is checked once a day; hourly, 6-hourly and weekly are offered; a paused one is not checked at all
+- [x] One clip posts to three accounts on the same platform, each logged separately, with a per-account gap between posts
 
 **Verification:**
-- [ ] `python tests/test_web.py`: fake clock over three days, bulk add, fan-out with a stubbed publisher
-- [ ] Manual: two channels and two accounts for a day
+- [x] `python tests/test_web.py`: bulk add of ten, cadence honoured and overridden, fan-out to three accounts, never twice to one (21 checks)
+- [ ] Manual: two channels and two accounts for a day - waiting on yt-dlp and a working key
 
 **Dependencies:** T18, T8-T10 · **Files:** `shorts/web/sources.py`, `shorts/web/worker.py`, `shorts/web/connections.py`, `shorts/web/db.py`, `tests/test_web.py` · **Scope:** L - split if it grows
 

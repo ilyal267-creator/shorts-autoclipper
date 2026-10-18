@@ -275,3 +275,6 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .card-publish-error { margin: 0; font-size: 13px; color: var(--bad); line-height: 1.45; }
 
 .pause-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px 16px; margin-bottom: 20px; max-width: 680px; }
+
+.cadence-row { display: flex; align-items: center; gap: 10px; }
+.cadence-row .input { width: auto; flex-grow: 1; height: 36px; }

@@ -45,6 +45,11 @@ def sign_in(client: TestClient, email: str, **overrides):
 
 
 def app_client(tmp: str) -> tuple[TestClient, Path]:
+    from shorts.web import connections
+
+    # connection ids start at 1 in every fresh database, and the access-token cache is keyed
+    # by id - so without this a token minted in one test is reused by the next
+    connections._tokens.clear()
     app = create_app(Path(tmp))
     return TestClient(app), app.state.db_path
 
@@ -906,7 +911,8 @@ def test_a_watched_channel_posts_by_itself_but_every_rail_can_stop_it():
     from shorts.web import connections, posting, worker
 
     with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
-            os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock", "SHORTS_POSTS_PER_ACCOUNT_PER_DAY": "2"}):
+            os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock", "SHORTS_POSTS_PER_ACCOUNT_PER_DAY": "2",
+                         "SHORTS_MINUTES_BETWEEN_POSTS": "0"}):  # the gap has its own test
         client, db_path = signed_in(tmp)
         connect_youtube(client, channel_id="UCmine", handle="My channel")
         run_id, source_id = finished_channel_run(client, db_path, tmp, flag_clip_1=True)
@@ -987,6 +993,108 @@ def test_a_channel_with_no_rights_record_never_posts_by_itself():
         conn.close()
         source = __import__("shorts.web.channels", fromlist=["x"]).by_id(db_path, source_id)
         assert posting.held_back(db_path, 1, source, [], "UCmine") is None
+
+
+def test_many_channels_on_their_own_cadence():
+    from shorts import sources
+    from shorts.web import channels
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+
+        # ten at once, sharing one permission record
+        wanted = ["@creator%d" % n for n in range(10)]
+        resolve = lambda url: sources.Channel("UCchan%s" % url.strip()[-1], "Creator " + url.strip()[-1])
+        with mock.patch.object(channels.sources, "resolve", resolve):
+            client.post("/channels", data={
+                "urls": "\n".join(wanted), "has_permission": "yes", "granted_by": "Dana Reed",
+                "granted_at": "2026-10-17", "evidence": "email: clipping programme",
+            })
+        rows = channels.listed(db_path, 1)
+        assert len(rows) == 10, len(rows)
+        assert {row["rights"] for row in rows} == {"permitted"}
+        assert {row["cadence_minutes"] for row in rows} == {1440}  # daily unless told otherwise
+
+        # daily means daily: checked once, then not again for a day
+        first = rows[0]["id"]
+        assert first in [row["id"] for row in channels.due(db_path)]
+        channels.checked(db_path, first, "vid_1")
+        assert first not in [row["id"] for row in channels.due(db_path)]
+
+        conn = db.connect(db_path)
+        with conn:  # as if that check had been 25 hours ago
+            conn.execute("UPDATE channel_sources SET last_checked_at = datetime('now', '-25 hours') WHERE id = ?", (first,))
+        conn.close()
+        assert first in [row["id"] for row in channels.due(db_path)]
+
+        # hourly is offered, and honoured
+        client.post("/channels/%d/cadence" % first, data={"cadence_minutes": "60"})
+        conn = db.connect(db_path)
+        with conn:
+            conn.execute("UPDATE channel_sources SET last_checked_at = datetime('now', '-90 minutes') WHERE id = ?", (first,))
+        conn.close()
+        assert first in [row["id"] for row in channels.due(db_path)]
+        client.post("/channels/%d/cadence" % first, data={"cadence_minutes": "10080"})  # weekly
+        assert first not in [row["id"] for row in channels.due(db_path)]
+        assert "Daily" in client.get("/channels").text
+
+        # a paused channel is not checked at all, whatever its cadence
+        second = rows[1]["id"]
+        client.post("/channels/%d/pause" % second)
+        assert second not in [row["id"] for row in channels.due(db_path)]
+        assert client.post("/channels/%d/cadence" % second, data={"cadence_minutes": "nonsense"},
+                           follow_redirects=False).status_code == 303
+
+
+def test_one_clip_reaches_three_accounts_each_logged_on_its_own():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import publish as publishing
+    from shorts.web import connections, posting, worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock", "SHORTS_MINUTES_BETWEEN_POSTS": "0"}):
+        client, db_path = signed_in(tmp)
+        for channel_id, handle in (("UCone", "Main channel"), ("UCtwo", "Second channel"), ("UCthree", "Third channel")):
+            connect_youtube(client, channel_id=channel_id, handle=handle)
+        assert len(posting.accounts_for(db_path, 1, "youtube_shorts")) == 3
+
+        run_id, _ = finished_channel_run(client, db_path, tmp)
+        FakeYouTube.sent = []
+        with mock.patch.object(connections.pipeline_auth, "_post_form",
+                               lambda endpoint, fields: {"access_token": "live", "expires_in": 3600}), \
+                mock.patch.object(publishing, "_requests", lambda: FakeYouTube()), \
+                mock.patch.object(publishing.time, "sleep", lambda s: None):
+            lines = worker.post_what_we_may(db_path, Path(tmp), run_id)
+
+        # two clips across three accounts: six posts, each with its own row and link
+        assert len(FakeYouTube.sent) == 6, lines
+        posts = posting.recent(db_path, 1)
+        assert len(posts) == 6
+        assert {post["account"] for post in posts} == {"Main channel", "Second channel", "Third channel"}
+        assert len({post["url"] for post in posts}) == 6
+        assert all(post["automatic"] for post in posts)
+
+        # and never a second time to the same account
+        with mock.patch.object(connections.pipeline_auth, "_post_form",
+                               lambda endpoint, fields: {"access_token": "live", "expires_in": 3600}), \
+                mock.patch.object(publishing, "_requests", lambda: FakeYouTube()):
+            FakeYouTube.sent = []
+            worker.post_what_we_may(db_path, Path(tmp), run_id)
+        assert FakeYouTube.sent == []
+        assert len(posting.recent(db_path, 1)) == 6
+
+        # the gap rail: with a minute between posts, an account that just posted waits
+        with mock.patch.dict(os.environ, {"SHORTS_MINUTES_BETWEEN_POSTS": "60"}):
+            source = __import__("shorts.web.channels", fromlist=["x"]).by_id(db_path, 1)
+            assert "posted less than 60 minutes ago" in posting.held_back(db_path, 1, source, [], "UCone")
+            assert posting.held_back(db_path, 1, source, [], "UCnever_posted") is None
+
+        page = client.get("/posts").text
+        assert "Second channel" in page and "6 this week" in page
 
 
 def test_migrations_run_once_and_survive_a_restart():

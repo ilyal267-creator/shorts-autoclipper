@@ -54,10 +54,22 @@ def system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _call(schema: dict, user_prompt) -> dict:
+def _client():
+    """The SDK client, plus the one header a user-scoped key needs.
+
+    A key made for a person rather than for a workspace cannot tell Anthropic which
+    workspace to bill, and every call is refused until it does. A workspace-scoped key
+    carries that itself and needs nothing here."""
     import anthropic
 
-    client = anthropic.Anthropic()
+    workspace = os.getenv("ANTHROPIC_WORKSPACE_ID")
+    if workspace:
+        return anthropic.Anthropic(default_headers={"anthropic-workspace-id": workspace})
+    return anthropic.Anthropic()
+
+
+def _call(schema: dict, user_prompt) -> dict:
+    client = _client()
     # Streamed, because thinking counts against max_tokens and a long transcript pushes both
     # the reasoning and the plan well past a modest budget — a cap lands as a half-written
     # JSON string, not an error. Streaming also keeps a multi-minute call off the HTTP timeout.
