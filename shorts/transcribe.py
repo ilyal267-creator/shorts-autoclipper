@@ -142,8 +142,8 @@ def transcribe(
 
     if not words:
         raise TranscriptionError(
-            "transcription returned no words from audio track %d — if the source has several "
-            "tracks, the speech may be on a different one" % audio_track
+            "no speech was found on audio track %d - if this file has more than one "
+            "audio track, the talking may be on another one" % audio_track
         )
     return Transcript(
         words=words,

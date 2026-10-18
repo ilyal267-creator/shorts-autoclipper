@@ -33,6 +33,9 @@ class Clip:
     audio: str
     selection_reason: str
     confidence: str
+    # What is on screen, when the model chose this clip by looking rather than reading.
+    # With no speech it is the only material the copy and the narration have.
+    description: str = ""
     copy: dict = field(default_factory=dict)
     subtitles: list[Line] = field(default_factory=list)
     asset_ref: str | None = None

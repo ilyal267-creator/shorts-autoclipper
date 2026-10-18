@@ -54,7 +54,7 @@ def system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _call(schema: dict, user_prompt: str) -> dict:
+def _call(schema: dict, user_prompt) -> dict:
     import anthropic
 
     client = anthropic.Anthropic()
@@ -65,7 +65,7 @@ def _call(schema: dict, user_prompt: str) -> dict:
         model=MODEL,
         max_tokens=64000,
         system=[{"type": "text", "text": system_prompt(), "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[{"role": "user", "content": user_prompt}],  # a string, or content blocks
         thinking={"type": "adaptive"},
         output_config={"effort": "high", "format": {"type": "json_schema", "schema": schema}},
     ) as stream:
@@ -166,6 +166,7 @@ CLIP_SCHEMA = {
                     "start",
                     "end",
                     "selection_reason",
+                    "description",
                     "confidence",
                     "cuts",
                     "reframe",
@@ -175,6 +176,10 @@ CLIP_SCHEMA = {
                     "start": {"type": "number"},
                     "end": {"type": "number"},
                     "selection_reason": {"type": "string"},
+                    "description": {
+                        "type": "string",
+                        "description": "what happens on screen in this clip, for writing its copy",
+                    },
                     "confidence": {"type": "string", "enum": CONFIDENCE},
                     "cuts": {
                         "type": "array",
@@ -259,6 +264,73 @@ def plan_clips(cfg: Config, transcript: Transcript, width: int, height: int, pea
         + "Transcript:\n" + timeline(transcript, peaks=peaks)
     )
     return _call(CLIP_SCHEMA, prompt)
+
+
+def plan_clips_from_frames(cfg: Config, frames, duration: float, width: int, height: int, peaks=()) -> dict:
+    """Pick clips by looking, for a video with no speech in it.
+
+    Everything downstream works from words - hooks, captions, narration - so each clip also
+    comes back with a description of what is on screen, and that becomes the material the
+    copywriter and the narrator work from."""
+    if provider() == "mock":
+        return _mock_frames(cfg, duration)
+    lo, hi = cfg.clip_length_range
+    keywords = ", ".join(cfg.niche_keywords) or "(none given)"
+    blocks = [{
+        "type": "text",
+        "text": (
+            "Stage 4.2 and 4.3 for this run, from the picture: this source has no speech in "
+            "it, so there is no transcript to read.\n\n"
+            "Source: %s - %dx%d, %.1fs.\n" % (cfg.source_video, width, height, duration)
+            + "Target clip count: %d. Allowed duration: %d-%ds.\n" % (cfg.clip_count, lo, hi)
+            + "Brand voice: %s\nNiche keywords: %s\n\n" % (cfg.brand_voice, keywords)
+            + "The frames below are stills taken across the whole video, each labelled with "
+              "the second it was taken at. Work out what the video is and where something "
+              "actually happens: a change on screen, a result, a reveal, a reaction. Give "
+              "every clip a `description` of what is on screen during it - that is the only "
+              "material the hook, caption and narration will have, so make it concrete and "
+              "specific rather than a label. Leave `cuts` empty unless you can see dead time "
+              "between two frames. Timestamps in seconds, one decimal, inside 0-%.1f.\n\n" % duration
+            + ("Loud moments, which on a silent-of-speech source usually mean something "
+               "landed:\n" + lines_of(peaks) + "\n\n" if peaks else "")
+            + "Return fewer clips than asked for rather than padding with weak ones, and say "
+              "so in notes."
+        ),
+    }]
+    for frame in frames:
+        blocks.append({"type": "text", "text": "at %.1fs" % frame.at})
+        blocks.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": frame.base64},
+        })
+    return _call(CLIP_SCHEMA, blocks)
+
+
+def lines_of(peaks) -> str:
+    return "\n".join(peak.line() for peak in sorted(peaks, key=lambda peak: peak.start))
+
+
+def _mock_frames(cfg: Config, duration: float) -> dict:
+    """The same shape as the mock transcript plan, so the vision path is testable offline."""
+    lo, hi = cfg.clip_length_range
+    stride = duration / max(cfg.clip_count, 1)
+    span = min(hi, max(lo, stride * 0.6))
+    clips = []
+    for index in range(cfg.clip_count):
+        start = index * stride
+        if start + span > duration:
+            break
+        clips.append({
+            "start": round(start, 1), "end": round(start + span, 1),
+            "selection_reason": "[MOCK] evenly spaced; no model looked at the picture",
+            "description": "[MOCK] something happens on screen",
+            "confidence": "low", "cuts": [], "reframe": {"mode": "fit"}, "audio": "preserve",
+        })
+    return {
+        "clips": clips,
+        "excluded_segments": [],
+        "notes": "[MOCK] no model ran; these segments are not editorially chosen",
+    }
 
 
 def _mock_clips(cfg: Config, transcript: Transcript) -> dict:

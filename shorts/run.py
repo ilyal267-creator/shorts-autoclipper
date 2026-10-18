@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import agent, compliance, hype, media, publish as publishing, render as rendering
+from . import agent, compliance, frames as frames_mod, hype, media, publish as publishing, render as rendering
 from .clips import (
     Clip,
     duplicate_copy,
@@ -23,7 +23,11 @@ from .clips import (
 )
 from .config import Config
 from .schedule import Queue, slots
-from .transcribe import transcribe
+from .transcribe import Transcript, TranscriptionError, transcribe
+
+
+def empty_transcript(duration: float) -> Transcript:
+    return Transcript(words=[], language="", duration=duration, source="none (no speech)")
 
 
 class Run:
@@ -44,6 +48,7 @@ class Run:
         self.posted: set[tuple[str, str, str]] = set()
         self.voices: dict[str, str] = {}  # platform -> ElevenLabs voice id, chosen once per run
         self.transcript = None
+        self.silent = False
 
     def note(self, message: str, stage: str | None = None, data=None) -> None:
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
@@ -92,18 +97,39 @@ class Run:
             )
 
         self.note("transcribing", stage="transcribe")
-        transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language, cfg.audio_track)
+        try:
+            transcript = transcribe(cfg.source_video, cfg.source_transcript, cfg.language, cfg.audio_track)
+        except TranscriptionError as exc:
+            # No speech is not a failure: screen recordings, gameplay and montages are
+            # ordinary sources. There is simply nothing to read, so we look instead.
+            self.note(str(exc))
+            transcript = empty_transcript(probe.duration)
         self.transcript = transcript
         self.note("transcript: %d words via %s (%s)" % (len(transcript.words), transcript.source, transcript.language))
 
         peaks = hype.of(cfg.source_video, cfg.audio_track, transcript.words)
+        self.silent = not transcript.words
         if peaks:
             self.note(
                 "loud moments: %s"
                 % ", ".join("%.0f-%.0fs" % (peak.start, peak.end) for peak in peaks[:5])
             )
         self.note("choosing clips", stage="plan")
-        plan = agent.plan_clips(cfg, transcript, probe.width, probe.height, peaks)
+        if self.silent:
+            stills = frames_mod.sample(cfg.source_video, probe.duration)
+            if not stills:
+                raise media.MediaError(
+                    "this file has neither speech to read nor frames to look at"
+                )
+            self.note("no speech: choosing from %d frames of the picture" % len(stills))
+            self.flags.append(
+                "no speech in this source - clips were chosen from the picture, and the hooks and captions describe what is on screen rather than quote anyone"
+            )
+            plan = agent.plan_clips_from_frames(
+                cfg, stills, probe.duration, probe.width, probe.height, peaks
+            )
+        else:
+            plan = agent.plan_clips(cfg, transcript, probe.width, probe.height, peaks)
         if plan.get("notes"):
             self.note("selection notes: %s" % plan["notes"])
         self.excluded.extend(plan.get("excluded_segments", []))
@@ -164,6 +190,7 @@ class Run:
                 ),
                 audio=raw.get("audio", "preserve"),
                 selection_reason=raw.get("selection_reason", ""),
+                description=raw.get("description", ""),
                 confidence=raw.get("confidence", "low"),
             )
             built.append(clip)
@@ -183,7 +210,7 @@ class Run:
     def _process(self, clip: Clip, index: int, transcript, probe, siblings: list[Clip]) -> dict:
         cfg = self.cfg
         words = retime(transcript.words_between(clip.start, clip.end), clip.keeps)
-        clip_text = " ".join(w.text for w in words)
+        clip_text = " ".join(w.text for w in words) or clip.description
         self.note("%s: writing copy" % clip.clip_id, stage="copy")
 
         sibling_hooks = [
@@ -213,6 +240,10 @@ class Run:
         clip.subtitles = subtitle_lines(
             words, emphasis, clip_end=clip.duration, seam_points=seams(clip.keeps)
         )
+        if self.silent and not cfg.narrated:
+            self.flags.append(
+                "%s has no speech and no voiceover, so it carries no captions - turn voiceover on to give it words" % clip.clip_id
+            )
         for note in rendering.audio_notes(clip):
             self.flags.append(note)
 

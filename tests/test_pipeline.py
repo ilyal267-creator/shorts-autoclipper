@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -858,6 +859,55 @@ def test_watching_a_channel_resolves_dedupes_and_refuses_what_it_cannot_clip():
         saved = sources.fetch("https://www.youtube.com/watch?v=vid_new", Path(tmp) / "run", 60)
         assert saved.name == "source.mp4" and saved.read_bytes() == b"video"
         assert "height<=1080" in asked["format"]
+
+
+def test_a_video_with_no_speech_is_clipped_from_the_picture():
+    import shutil
+    import subprocess
+    import tempfile
+
+    from shorts import config as config_mod, frames, run as run_mod
+
+    # frames are spread across the whole video, however long it is
+    assert frames.every_for(10, max_frames=32) == frames.MIN_GAP
+    assert 9.0 < frames.every_for(300, max_frames=32) < 10.0
+
+    if not shutil.which("ffmpeg"):
+        print("    (skipped the ffmpeg half: not on PATH)")
+        return
+    os.environ["SHORTS_PROVIDER"] = "mock"
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        source = work / "screen.mp4"
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=24:duration=40",
+             "-f", "lavfi", "-i", "anullsrc=channel_layout=mono:sample_rate=44100:duration=40",
+             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-shortest", str(source)],
+            check=True,
+        )
+        stills = frames.sample(str(source), 40.0, max_frames=8)
+        assert 2 <= len(stills) <= 8, len(stills)
+        assert stills[0].jpeg[:2] == b"\xff\xd8" and stills[0].at == 0.0
+        assert stills[-1].at > stills[0].at
+
+        cfg = config_mod.from_dict({
+            "source_video": str(source),
+            "connected_accounts": [{"platform": "tiktok", "account_id": "a", "handle": "@x"}],
+            "clip_count": 2, "clip_length_range": [10, 20],
+            "rights_confirmed": True, "output_dir": str(work / "out"),
+        })
+        summary = run_mod.execute(cfg)
+
+        assert "error" not in summary, summary.get("error")
+        assert len(summary["clips"]) == 2, summary["clips"]
+        assert any("no speech in this source" in flag for flag in summary["flags_for_human_review"])
+        assert any("no captions" in flag for flag in summary["flags_for_human_review"])
+        for clip in summary["clips"]:
+            assert Path(clip["asset_ref"]).exists()
+            assert clip["platforms"]["tiktok"]["status"] == "draft"
+        assert any("choosing from" in line and "frames" in line for line in summary["log"]), summary["log"]
 
 
 def test_load_words_accepts_whisper_dumps():
