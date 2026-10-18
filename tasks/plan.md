@@ -114,7 +114,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 ### Phase 6: generated videos (added 18 October 2026)
 - [x] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
 - [x] T24: Style profile from a channel's public metadata
-- [ ] T25: Idea, script and shot list from the profile
+- [x] T25: Idea, script and shot list from the profile (plus a whole series in one pass)
 - [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
 - [ ] T27: Generated runs in the dashboard
 - [ ] T28: Daily generation on a cadence, under a spending ceiling
@@ -283,7 +283,7 @@ generates is a loop that spends. So, following the house rule:
 
 - [x] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
 - [x] T24: Style profile from a channel's public metadata
-- [ ] T25: Idea, script and shot list from the profile
+- [x] T25: Idea, script and shot list from the profile (plus a whole series in one pass)
 - [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
 - [ ] T27: Generated runs in the dashboard: start one, see the script, regenerate a shot
 - [ ] T28: Daily generation on a cadence, under a spending ceiling

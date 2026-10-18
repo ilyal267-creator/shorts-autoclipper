@@ -1065,6 +1065,46 @@ def test_a_style_profile_is_a_formula_not_an_identity():
     assert set(mocked) == set(style.PROFILE_SCHEMA["required"])
 
 
+def test_a_script_is_cut_to_fit_and_checked_before_it_is_generated():
+    from shorts import script
+
+    long_script = {
+        "title": "t", "hook": "h", "narration": "word " * 100, "caption": "c", "hashtags": [],
+        "why": "w",
+        "shots": [{"prompt": "a cat at a laundry machine, wide, night", "seconds": n, "beat": "b"}
+                  for n in (7, 5, 4, 4, 9, 9, 9)],
+    }
+    fitted = script.fit(dict(long_script), seconds=20)
+    assert sum(s["seconds"] for s in fitted["shots"]) == fitted["seconds"] <= 20
+    assert len(fitted["shots"]) <= script.MAX_SHOTS
+
+    # a shot asking for more than the generator allows is clamped, not passed through
+    odd = script.fit({"shots": [{"prompt": "x y z a b", "seconds": 99, "beat": "b"}]}, seconds=30)
+    assert odd["shots"][0]["seconds"] == script.SHOT_SECONDS[1]
+    assert script.fit({"shots": [{"prompt": "x y z a b", "seconds": 1, "beat": "b"}]}, 30)["shots"][0]["seconds"] == script.SHOT_SECONDS[0]
+
+    # what a person is asked to look at before anything is spent
+    assert script.problems(fitted), "100 words over 20 seconds should be flagged"
+    assert any("rushed" in p for p in script.problems(fitted))
+    assert script.problems({"shots": [], "narration": ""}) == ["the script has no shots to generate"]
+    thin = {"shots": [{"prompt": "a cat", "seconds": 5, "beat": "b"}], "narration": "short", "seconds": 5}
+    assert any("too thin" in p for p in script.problems(thin))
+    good = {"shots": [{"prompt": "a basset hound at a washing machine, wide, night", "seconds": 6, "beat": "b"}],
+            "narration": "Your cycle ended forty-one minutes ago.", "seconds": 6}
+    assert script.problems(good) == []
+
+    # the cost of a script is the cost of its shots, and a series is the sum of its videos
+    assert script.cost_of(good, "1080p") == round(0.08 * 6, 4) or script.cost_of(good, "1080p") > 0
+    series = {"videos": [good, good]}
+    assert script.series_cost(series, "1080p") == round(2 * script.cost_of(good, "1080p"), 4)
+
+    # with no model, a series says so in every video rather than looking like work
+    os.environ["SHORTS_PROVIDER"] = "mock"
+    mocked = script.write_series({}, count=3, seconds=20)
+    assert len(mocked["videos"]) == 3
+    assert all("[MOCK]" in v["narration"] and "must not be published" in v["narration"] for v in mocked["videos"])
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"
