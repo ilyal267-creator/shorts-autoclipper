@@ -18,7 +18,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 API = "https://api.higgsfield.ai"
-MODEL = "/bytedance/seedance-2.5/reference-to-video"
+# Two shapes of the same job. Text-to-video is what a written shot list needs; the
+# reference model is there for when a shot has to continue from an image we already have.
+TEXT_MODEL = "/kling-video/v3.0/std/text-to-video"   # prompt only, 9:16, 3-15s
+REFERENCE_MODEL = "/bytedance/seedance-2.5/reference-to-video"
+TEXT_SECONDS = (3, 15)
 SECRETS = Path(os.getenv("SHORTS_SECRETS_DIR", ".secrets")) / "higgsfield.json"
 POLL_SECONDS = 5.0
 POLL_LIMIT = 600.0  # ten minutes: past that, something is wrong rather than slow
@@ -112,20 +116,32 @@ def _headers(creds: dict) -> dict:
     }
 
 
-def submit(prompt: str, seconds: int, resolution: str, references: dict, creds: dict) -> dict:
+def submit(prompt: str, seconds: int, resolution: str, references: dict, creds: dict,
+           sound: bool = False) -> dict:
     """Ask for one shot. Returns the handle: request_id and status_url."""
     import requests
 
-    body = {
-        "prompt": prompt,
-        "duration": int(seconds),
-        "resolution": resolution,
-        "aspect_ratio": "9:16",
-        # our own narration goes over the top, and the captions are timed to that
-        "generate_audio": False,
-        **references,
-    }
-    response = requests.post(API + MODEL, headers=_headers(creds), json=body, timeout=60)
+    if references:
+        model = REFERENCE_MODEL
+        body = {
+            "prompt": prompt,
+            "duration": int(seconds),
+            "resolution": resolution,
+            "aspect_ratio": "9:16",
+            # our own narration goes over the top, and the captions are timed to that
+            "generate_audio": False,
+            **references,
+        }
+    else:
+        model = TEXT_MODEL
+        body = {
+            "prompt": prompt[:2500],
+            "duration": max(TEXT_SECONDS[0], min(int(seconds), TEXT_SECONDS[1])),
+            "aspect_ratio": "9:16",
+            # sound off when a voice goes over the top; on when the noise *is* the joke
+            "sound": "on" if sound else "off",
+        }
+    response = requests.post(API + model, headers=_headers(creds), json=body, timeout=60)
     if response.status_code == 401:
         raise GenerateError("Higgsfield refused the credentials")
     if response.status_code >= 400:
@@ -206,12 +222,19 @@ def mock_shot(prompt: str, seconds: int, resolution: str, into: Path) -> Path:
 
 
 def make_shot(prompt: str, into: Path, tier: int = 1, references: dict | None = None,
-              spent_today: float = 0.0, ceiling: float | None = None) -> Shot:
-    """One shot, mocked or real, costed first and never silently expensive."""
+              spent_today: float = 0.0, ceiling: float | None = None, seconds: int | None = None,
+              sound: bool = False) -> Shot:
+    """One shot, mocked or real, costed first and never silently expensive.
+
+    The shot's own length wins: the tier decides how good it looks and what it costs a second,
+    not how long the script wanted it to be.
+    """
     settings = TIERS.get(tier) or TIERS[1]
     if settings["resolution"] is None:
         raise GenerateError("tier 0 generates nothing - assemble it from stills instead")
-    seconds, resolution = settings["seconds"], settings["resolution"]
+    resolution = settings["resolution"]
+    seconds = int(seconds or settings["seconds"])
+    seconds = max(TEXT_SECONDS[0], min(seconds, TEXT_SECONDS[1]))
     cost = estimate(seconds, resolution)
 
     if provider() == "mock":
@@ -225,7 +248,7 @@ def make_shot(prompt: str, into: Path, tier: int = 1, references: dict | None = 
     creds = credentials()
     if not creds:
         raise GenerateError("no Higgsfield credentials - put them in %s" % SECRETS)
-    handle = submit(prompt, seconds, resolution, references or {}, creds)
+    handle = submit(prompt, seconds, resolution, references or {}, creds, sound)
     url = wait_for(handle, creds)
     download(url, into)
     return Shot(into, seconds, resolution, cost, mocked=False, prompt=prompt,

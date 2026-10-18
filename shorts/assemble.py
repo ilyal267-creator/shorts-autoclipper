@@ -19,7 +19,7 @@ class AssembleError(Exception):
 
 
 def build_command(shots: list[Path], narration: Path | None, ass_path: Path, out_path: Path,
-                  seconds: float) -> list[str]:
+                  seconds: float, keep_sound: bool = False) -> list[str]:
     """One ffmpeg invocation: every shot to 1080x1920, joined, captioned, with the voice over it."""
     if not shots:
         raise AssembleError("there are no shots to assemble")
@@ -31,7 +31,13 @@ def build_command(shots: list[Path], narration: Path | None, ass_path: Path, out
             % (index, OUT_W, OUT_H, OUT_W, OUT_H, index)
         )
         labels.append("[v%d]" % index)
-    parts.append("%sconcat=n=%d:v=1:a=0[joined]" % ("".join(labels), len(shots)))
+    if keep_sound:
+        # the shots' own audio is the soundtrack - a husky's noises are the joke, and a
+        # voice over the top would bury them
+        pairs = "".join("[v%d][%d:a]" % (i, i) for i in range(len(shots)))
+        parts.append("%sconcat=n=%d:v=1:a=1[joined][aout]" % (pairs, len(shots)))
+    else:
+        parts.append("%sconcat=n=%d:v=1:a=0[joined]" % ("".join(labels), len(shots)))
     parts.append(
         "[joined]subtitles='%s'[vout]" % render._escape_for_filter(ass_path)
     )
@@ -50,12 +56,12 @@ def build_command(shots: list[Path], narration: Path | None, ass_path: Path, out
         "-filter_complex", ";".join(parts),
         "-map", "[vout]",
     ]
-    command += ["-map", "[aout]"] if narration is not None else ["-an"]
+    command += ["-map", "[aout]"] if (narration is not None or keep_sound) else ["-an"]
     command += [
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
     ]
-    if narration is not None:
+    if narration is not None or keep_sound:
         command += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000"]
     # the video ends when the pictures do, whatever the voice does
     command += ["-t", "%.3f" % seconds]
@@ -64,7 +70,8 @@ def build_command(shots: list[Path], narration: Path | None, ass_path: Path, out
 
 
 def make(script: dict, folder: Path, name: str = "video", tier: int = 1, voice_id: str | None = None,
-         subtitle_style: dict | None = None, spent_today: float = 0.0, on_event=None) -> dict:
+         subtitle_style: dict | None = None, spent_today: float = 0.0, on_event=None,
+         keep_sound: bool = False) -> dict:
     """Generate the shots, read the narration, burn the captions, return what it made and cost."""
     media.require_ffmpeg()
     folder = Path(folder)
@@ -76,14 +83,15 @@ def make(script: dict, folder: Path, name: str = "video", tier: int = 1, voice_i
         said("shot %d of %d: %s" % (index, len(script["shots"]), shot["prompt"][:60]))
         result = higgsfield.make_shot(
             shot["prompt"], shots_dir / ("shot_%02d.mp4" % index), tier=tier,
-            spent_today=spent_today + cost,
+            spent_today=spent_today + cost, seconds=shot["seconds"],
+            sound=keep_sound,
         )
         made.append(result.path)
         cost += result.cost
         notes.extend(result.notes)
 
     narration_path, words = None, []
-    text = (script.get("narration") or "").strip()
+    text = "" if keep_sound else (script.get("narration") or "").strip()
     if text:
         said("recording the narration")
         narration_path = folder / ("%s_voice.mp3" % name)
@@ -99,7 +107,7 @@ def make(script: dict, folder: Path, name: str = "video", tier: int = 1, voice_i
 
     out_path = folder / ("%s.mp4" % name)
     said("assembling %d shots into %dx%d" % (len(made), OUT_W, OUT_H))
-    media.run(build_command(made, narration_path, ass_path, out_path, picture_seconds))
+    media.run(build_command(made, narration_path, ass_path, out_path, picture_seconds, keep_sound))
 
     spoken = words[-1].end if words else 0.0
     if spoken > picture_seconds + 0.3:
