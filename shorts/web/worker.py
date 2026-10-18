@@ -7,11 +7,14 @@ finish no sooner than one after the other, and both testers wait longer to see a
 from __future__ import annotations
 
 import json
+import secrets
 import time
 import traceback
+from pathlib import Path
 
-from .. import config as config_mod, run as run_mod
-from . import db
+from .. import config as config_mod, media, run as run_mod, sources
+from . import channels, connections, db
+from .runs import limits, runs_started_today
 
 STAGES = ["probe", "transcribe", "plan", "copy", "compliance", "voiceover", "render", "deliver"]
 
@@ -95,7 +98,89 @@ def execute(db_path, run) -> str:
     return status
 
 
-def work(db_path, poll_seconds: float = 2.0, once: bool = False) -> None:
+def queue_from_channel(db_path, data_dir, source) -> str | None:
+    """Fetch what is new on one channel and queue a run for it. None when there is nothing."""
+    cap = limits()
+    if runs_started_today(db_path, source["user_id"]) >= cap["runs_per_day"]:
+        channels.checked(db_path, source["id"])  # not a fault of the channel: look again later
+        return None
+
+    uploads = sources.feed(source["channel_id"])
+    fresh = sources.new_since(uploads, source["last_video_id"])
+    if not fresh:
+        channels.checked(db_path, source["id"])
+        return None
+
+    video = fresh[0]  # oldest unseen first, one per check, so a backlog arrives in order
+    run_id = secrets.token_urlsafe(9)
+    folder = Path(data_dir) / "runs" / run_id
+    saved = sources.fetch(video.url, folder, cap["max_minutes"])
+    probe = media.probe(str(saved))
+    if probe.audio_tracks == 0:
+        raise sources.SourceError("that upload has no audio track to cut from")
+
+    platforms = sorted({
+        row["platform"] for row in connections.listed(db_path, source["user_id"])
+        if row["status"] == "ok"
+    }) or list(config_mod.PLATFORMS)
+    raw = {
+        "source_video": str(saved.resolve()),
+        "connected_accounts": [
+            {"platform": platform, "account_id": "pending", "handle": ""} for platform in platforms
+        ],
+        "clip_count": 3,
+        "clip_length_range": [15, 45],
+        # Automatic publishing is decided per clip once it exists (T22); a fetched upload
+        # always becomes drafts first, whatever the channel is allowed to do.
+        "posting_mode": "draft_for_approval",
+        "rights_confirmed": True,
+        "rights": channels.rights_of(source),
+        "voiceover": {"enabled": False, "disclose": True},
+        "output_dir": str((folder / "out").resolve()),
+    }
+    config_mod.from_dict(raw)  # refuse here rather than when the worker picks it up
+
+    conn = db.connect(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """INSERT INTO runs (id, user_id, status, source_name, source_path, source_bytes,
+                   probe_json, config_json, queued_at, source_id)
+                   VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, datetime('now'), ?)""",
+                (
+                    run_id, source["user_id"], video.title[:120] or video.video_id, str(saved),
+                    saved.stat().st_size, json.dumps(probe.__dict__), json.dumps(raw), source["id"],
+                ),
+            )
+    finally:
+        conn.close()
+    channels.checked(db_path, source["id"], video.video_id)
+    return run_id
+
+
+def check_channels(db_path, data_dir, every_minutes: int = 60) -> int:
+    """One pass over the channels that are due. Returns how many runs it queued."""
+    queued = 0
+    for source in channels.due(db_path, every_minutes):
+        try:
+            run_id = queue_from_channel(db_path, data_dir, source)
+        except sources.SourceError as exc:
+            # one channel's trouble is that channel's trouble, not the worker's
+            channels.trouble(db_path, source["id"], str(exc), exc.pause)
+            print("channel %s: %s" % (source["channel_id"], exc), flush=True)
+            continue
+        except Exception as exc:
+            channels.trouble(db_path, source["id"], "%s: %s" % (type(exc).__name__, exc), False)
+            traceback.print_exc()
+            continue
+        if run_id:
+            queued += 1
+            print("channel %s queued run %s" % (source["channel_id"], run_id), flush=True)
+    return queued
+
+
+def work(db_path, poll_seconds: float = 2.0, once: bool = False, data_dir=None,
+         every_minutes: int = 60) -> None:
     db.migrate(db_path)
     recovered = recover(db_path)
     if recovered:
@@ -103,6 +188,9 @@ def work(db_path, poll_seconds: float = 2.0, once: bool = False) -> None:
     while True:
         run = claim_next(db_path)
         if run is None:
+            # nothing waiting: this is when there is time to see what the channels have
+            if data_dir is not None and check_channels(db_path, data_dir, every_minutes):
+                continue
             if once:
                 return
             time.sleep(poll_seconds)

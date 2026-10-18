@@ -462,7 +462,7 @@ YouTube refusing the server — back off, pause that source, say so on its card.
 **Acceptance criteria:**
 - [x] A channel URL, an @handle and a bare channel id all resolve to the same source
 - [x] A new upload is noticed once and never started twice
-- [x] A refused download raises pause-this-source with the reason (the worker side lands in T21)
+- [x] A refused download pauses that source with the reason on its card; the worker carries on with the others
 
 **Verification:**
 - [x] `python tests/test_pipeline.py`: feed parsing, dedupe, refusals, bot-check, download stubbed

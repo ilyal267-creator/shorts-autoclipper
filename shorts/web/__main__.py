@@ -31,7 +31,7 @@ def main(argv=None) -> int:
     elif args.command == "worker":
         from .worker import work
 
-        work(db_path)
+        work(db_path, data_dir=data_dir())
     elif args.command == "invite":
         db.migrate(db_path)
         print(auth.invite(db_path, args.email))

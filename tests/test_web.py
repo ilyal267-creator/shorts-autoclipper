@@ -734,6 +734,115 @@ def test_a_partners_credit_line_is_added_to_the_caption():
         assert review.with_credit(db_path, {'source_id': None}, 'as is') == 'as is'
 
 
+def add_source(db_path, channel_id="UCpartner", rights="permitted", **fields):
+    conn = db.connect(db_path)
+    row = {"user_id": 1, "channel_id": channel_id, "url": "https://www.youtube.com/channel/" + channel_id,
+           "title": "Partner stream", "rights": rights, "active": 1, "last_video_id": None,
+           "last_checked_at": None, "attribution": "Clipped from @partner with permission"}
+    row.update(fields)
+    with conn:
+        cursor = conn.execute(
+            """INSERT INTO channel_sources (user_id, channel_id, url, title, rights, active,
+               last_video_id, last_checked_at, attribution)
+               VALUES (:user_id, :channel_id, :url, :title, :rights, :active, :last_video_id,
+                       :last_checked_at, :attribution)""",
+            row,
+        )
+    conn.close()
+    return cursor.lastrowid
+
+
+def test_the_worker_checks_watched_channels_and_queues_what_is_new():
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("SKIP: ffmpeg not on PATH")
+        return
+    from shorts import sources
+    from shorts.web import channels, worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {**CLIENT, "SHORTS_PROVIDER": "mock"}):
+        client, db_path = signed_in(tmp)
+        source_id = add_source(db_path)
+        video = Path(tmp) / "upload.mp4"
+        make_video(video, seconds=40, audio_tracks=1)  # long enough for a 15-45s clip
+
+        uploads = [sources.Video("vid_new", "Best moment of the stream", "2026-10-18T09:00:00+00:00"),
+                   sources.Video("vid_old", "Yesterday", "2026-10-17T09:00:00+00:00")]
+
+        def fetch(url, into, max_minutes):
+            into.mkdir(parents=True, exist_ok=True)
+            saved = into / "source.mp4"
+            saved.write_bytes(video.read_bytes())
+            return saved
+
+        with mock.patch.object(worker.sources, "feed", lambda channel_id: uploads), \
+                mock.patch.object(worker.sources, "fetch", fetch):
+            assert worker.check_channels(db_path, Path(tmp)) == 1
+
+        conn = db.connect(db_path)
+        run = conn.execute("SELECT * FROM runs WHERE source_id = ?", (source_id,)).fetchone()
+        source = conn.execute("SELECT * FROM channel_sources WHERE id = ?", (source_id,)).fetchone()
+        conn.close()
+        assert run["status"] == "queued" and run["source_name"] == "Best moment of the stream"
+        raw = json.loads(run["config_json"])
+        assert raw["rights"]["basis"] == "permitted" and raw["rights"]["channel"] == "Partner stream"
+        assert raw["posting_mode"] == "draft_for_approval"  # fetched uploads are drafts first
+        assert source["last_video_id"] == "vid_new" and source["last_checked_at"]
+
+        # checked again straight away: nothing new, nothing queued, no second copy of that video
+        with mock.patch.object(worker.sources, "feed", lambda channel_id: uploads), \
+                mock.patch.object(worker.sources, "fetch", fetch):
+            assert worker.check_channels(db_path, Path(tmp), every_minutes=0) == 0
+        conn = db.connect(db_path)
+        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
+        conn.close()
+
+        # a channel checked a minute ago is not due; one never checked is
+        assert [s["id"] for s in channels.due(db_path, every_minutes=60)] == []
+        assert [s["id"] for s in channels.due(db_path, every_minutes=0)] == [source_id]
+
+        # the run the worker queued goes through the pipeline like any other
+        worker.work(db_path, once=True)
+        conn = db.connect(db_path)
+        finished = conn.execute("SELECT status, summary_json FROM runs WHERE source_id = ?", (source_id,)).fetchone()
+        conn.close()
+        assert finished["status"] == "needs_review", finished["status"]
+        summary = json.loads(finished["summary_json"])
+        assert summary["rights"]["basis"] == "permitted"
+        flags = summary["flags_for_human_review"]
+        assert any("with permission" in flag for flag in flags), flags
+
+
+def test_a_channel_in_trouble_pauses_itself_and_the_worker_carries_on():
+    from shorts import sources
+    from shorts.web import channels, worker
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, CLIENT):
+        client, db_path = signed_in(tmp)
+        refused = add_source(db_path, channel_id="UCrefused")
+        ordinary = add_source(db_path, channel_id="UCordinary")
+
+        def feed(channel_id):
+            if channel_id == "UCrefused":
+                raise sources.SourceError("YouTube refused this server. It wants cookies.", pause=True)
+            raise sources.SourceError("that one is still live - it can be clipped once it ends")
+
+        with mock.patch.object(worker.sources, "feed", feed):
+            assert worker.check_channels(db_path, Path(tmp), every_minutes=0) == 0
+
+        rows = {row["channel_id"]: row for row in channels.listed(db_path, 1)}
+        assert rows["UCrefused"]["active"] == 0 and "cookies" in rows["UCrefused"]["paused_reason"]
+        assert rows["UCordinary"]["active"] == 1 and "still live" in rows["UCordinary"]["paused_reason"]
+        assert "Paused:" in client.get("/channels").text
+
+        # over the daily cap, a channel is left alone rather than treated as broken
+        with mock.patch.dict(os.environ, {"SHORTS_RUNS_PER_DAY": "0"}), \
+                mock.patch.object(worker.sources, "feed", mock.Mock(side_effect=AssertionError("should not look"))):
+            assert worker.check_channels(db_path, Path(tmp), every_minutes=0) == 0
+        assert channels.listed(db_path, 1)[0]["active"] in (0, 1)
+
+
 def test_migrations_run_once_and_survive_a_restart():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "nested" / "shorts.db"

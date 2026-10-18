@@ -108,6 +108,56 @@ def add(db_path, user_id: int, channel, rights: str, permission: dict) -> int:
         conn.close()
 
 
+def due(db_path, every_minutes: int = 60) -> list:
+    """Active channels nobody has looked at for a while, longest-waiting first."""
+    conn = db.connect(db_path)
+    try:
+        return conn.execute(
+            """SELECT * FROM channel_sources
+               WHERE active = 1
+                 AND (last_checked_at IS NULL
+                      OR last_checked_at <= datetime('now', ?))
+               ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
+               LIMIT 20""",
+            ("-%d minutes" % every_minutes,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def checked(db_path, source_id: int, last_video_id: str | None = None) -> None:
+    conn = db.connect(db_path)
+    try:
+        with conn:
+            if last_video_id:
+                conn.execute(
+                    """UPDATE channel_sources SET last_checked_at = datetime('now'),
+                       last_video_id = ?, paused_reason = NULL WHERE id = ?""",
+                    (last_video_id, source_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE channel_sources SET last_checked_at = datetime('now') WHERE id = ?",
+                    (source_id,),
+                )
+    finally:
+        conn.close()
+
+
+def trouble(db_path, source_id: int, reason: str, pause: bool) -> None:
+    """Say what went wrong on the card, and stop checking when YouTube has refused us."""
+    conn = db.connect(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """UPDATE channel_sources SET paused_reason = ?, active = ?,
+                   last_checked_at = datetime('now') WHERE id = ?""",
+                (reason[:300], 0 if pause else 1, source_id),
+            )
+    finally:
+        conn.close()
+
+
 def register(app, page) -> None:
     @app.get("/channels")
     def channels(request: Request, error: str = ""):
