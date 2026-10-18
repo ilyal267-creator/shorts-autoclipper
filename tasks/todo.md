@@ -466,7 +466,7 @@ YouTube refusing the server — back off, pause that source, say so on its card.
 
 **Verification:**
 - [x] `python tests/test_pipeline.py`: feed parsing, dedupe, refusals, bot-check, download stubbed
-- [ ] Manual: fetching a real video is not done - this machine cannot reach youtube.com (TLS interception), and downloading a channel that is not yours is the thing the rights record exists to gate. Do it on the server, on a channel you own
+- [x] Manual (feeds): @TED and @veritasium resolve to the right channel id live, 15 uploads each, dedupe correct. Downloading a video is still not done - that needs a channel you own or have permission for
 
 **Dependencies:** T17 · **Files:** `shorts/sources.py`, `shorts/web/sources.py`, `pyproject.toml`, `tests/test_web.py` · **Scope:** M
 
