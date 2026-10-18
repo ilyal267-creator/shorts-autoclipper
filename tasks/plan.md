@@ -112,7 +112,7 @@ Full task details (acceptance criteria, verification, files) are in [todo.md](to
 - [x] T22: Auto-publishing with its rails
 
 ### Phase 6: generated videos (added 18 October 2026)
-- [ ] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
+- [x] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
 - [ ] T24: Style profile from a channel's public metadata
 - [ ] T25: Idea, script and shot list from the profile
 - [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
@@ -281,7 +281,7 @@ generates is a loop that spends. So, following the house rule:
 
 ## Tasks
 
-- [ ] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
+- [x] T23: Higgsfield provider: mock by default, real behind a key, costed and polled
 - [ ] T24: Style profile from a channel's public metadata
 - [ ] T25: Idea, script and shot list from the profile
 - [ ] T26: Shots to a finished 9:16 video: generate, assemble, narrate, caption
