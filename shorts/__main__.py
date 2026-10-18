@@ -188,6 +188,30 @@ def cmd_doctor(args) -> int:
     return 0
 
 
+def cmd_fetch(args) -> int:
+    """Download one video, or a channel's newest upload, into a folder."""
+    from . import sources
+
+    url = args.url
+    try:
+        if "watch?v=" not in url and "youtu.be/" not in url:
+            channel = sources.resolve(url)
+            uploads = sources.feed(channel.channel_id)
+            if not uploads:
+                print("%s has nothing in its feed" % channel.title)
+                return 1
+            print("%s: newest upload is %s" % (channel.title, uploads[0].title))
+            url = uploads[0].url
+        saved = sources.fetch(url, Path(args.out or "."), args.max_minutes)
+    except sources.SourceError as exc:
+        print("could not fetch it: %s" % exc, file=sys.stderr)
+        if getattr(exc, "pause", False):
+            print("pause this source until a person has looked at it", file=sys.stderr)
+        return 1
+    print(saved)
+    return 0
+
+
 def printable(*streams) -> None:
     """Make output survive a caption's emoji, without corrupting it.
 
@@ -229,6 +253,12 @@ def main(argv=None) -> int:
 
     sp = sub.add_parser("voices", help="list the ElevenLabs voices your account can use")
     sp.set_defaults(handler=cmd_voices)
+
+    sp = sub.add_parser("fetch", help="download a video, or a channel's newest upload")
+    sp.add_argument("url", help="a video URL, a channel URL, or an @handle")
+    sp.add_argument("--out", help="where to put it (default: here)")
+    sp.add_argument("--max-minutes", type=float, default=60.0, dest="max_minutes")
+    sp.set_defaults(handler=cmd_fetch)
 
     sp = sub.add_parser("doctor", help="check tooling and credentials")
     sp.set_defaults(handler=cmd_doctor)

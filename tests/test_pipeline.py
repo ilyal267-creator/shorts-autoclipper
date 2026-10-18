@@ -737,6 +737,129 @@ def test_hype_finds_the_loud_moment_and_leaves_a_flat_recording_alone():
         assert abs(heard[0].start - 8.0) <= 1.0 and abs(heard[0].end - 12.0) <= 1.5, heard[0]
 
 
+def test_watching_a_channel_resolves_dedupes_and_refuses_what_it_cannot_clip():
+    from unittest import mock
+
+    from shorts import sources
+
+    feed_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">'
+        "<title>Ilya Builds</title>"
+        "<entry><yt:videoId>vid_new</yt:videoId><title>Shipping on a Friday</title>"
+        "<published>2026-10-18T09:00:00+00:00</published></entry>"
+        "<entry><yt:videoId>vid_mid</yt:videoId><title>Cutting scope</title>"
+        "<published>2026-10-17T09:00:00+00:00</published></entry>"
+        "<entry><yt:videoId>vid_old</yt:videoId><title>The 2am bug</title>"
+        "<published>2026-10-16T09:00:00+00:00</published></entry>"
+        "</feed>"
+    )
+    # a real channel page name-drops other channels first: the decoy here is what the old
+    # first-match-wins reading picked up, and it is not whose page this is
+    channel_page = (
+        '<html><script>{"recommended":"UCzzzzzzzzzzzzzzzzzzzzzz"}</script>'
+        '<link rel="canonical" href="https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv"></html>'
+    )
+
+    # a bare id, a channel URL and an @handle all land on the same channel
+    with mock.patch.object(sources, "_get", lambda url: feed_xml if "feeds" in url else channel_page):
+        for given in ("UCabcdefghijklmnopqrstuv",
+                      "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv",
+                      "@ilyabuilds"):
+            channel = sources.resolve(given)
+            assert channel.channel_id == "UCabcdefghijklmnopqrstuv", given
+            assert channel.title == "Ilya Builds"
+        videos = sources.feed("UCabcdefghijklmnopqrstuv")
+        assert [v.video_id for v in videos] == ["vid_new", "vid_mid", "vid_old"]
+        assert videos[0].url.endswith("watch?v=vid_new") and videos[0].title == "Shipping on a Friday"
+
+        # a page with no canonical id at all is refused, not guessed from a stray match
+        with mock.patch.object(sources, "_get", lambda url: '<html>UCzzzzzzzzzzzzzzzzzzzzzz</html>'):
+            try:
+                sources.resolve("@mystery")
+                raise AssertionError("a page with no canonical id should not resolve")
+            except sources.SourceError as exc:
+                assert "belongs to" in str(exc)
+
+        for wrong in ("", "https://vimeo.com/12345"):
+            try:
+                sources.resolve(wrong)
+                raise AssertionError("%r should not resolve" % wrong)
+            except sources.SourceError:
+                pass
+
+    # a first check takes only the newest; after that, everything since, oldest first, once
+    assert [v.video_id for v in sources.new_since(videos, None)] == ["vid_new"]
+    assert [v.video_id for v in sources.new_since(videos, "vid_old")] == ["vid_mid", "vid_new"]
+    assert sources.new_since(videos, "vid_new") == []
+
+    # rate limiting is a pause, not an error to retry into
+    class TooMany:
+        status_code = 429
+        text = ""
+
+    with mock.patch.object(sources, "_requests", lambda: mock.Mock(get=lambda *a, **k: TooMany())):
+        try:
+            sources._get("https://www.youtube.com/feeds/videos.xml?channel_id=UC")
+            raise AssertionError("429 should raise")
+        except sources.SourceError as exc:
+            assert exc.pause is True
+
+    # what cannot be clipped is refused before any bandwidth is spent, each with its own reason
+    for info, expected in (
+        ({"is_live": True, "duration": 100}, "still live"),
+        ({"live_status": "is_upcoming", "duration": 100}, "still live"),
+        ({"availability": "subscriber_only", "duration": 100}, "not public"),
+        ({"duration": 60 * 90}, "over the"),
+        ({}, "how long"),
+    ):
+        try:
+            sources.check(info, max_minutes=60)
+            raise AssertionError("%s should be refused" % info)
+        except sources.SourceError as exc:
+            assert expected in str(exc), (info, str(exc))
+    sources.check({"duration": 600, "availability": "public"}, max_minutes=60)  # this one is fine
+
+    # YouTube deciding the server is a robot pauses the source and says how to get through
+    try:
+        sources._raise_for(RuntimeError("ERROR: Sign in to confirm you are not a bot"))
+        raise AssertionError("a bot check should raise")
+    except sources.SourceError as exc:
+        assert exc.pause is True and "cookies" in str(exc).lower()
+    try:
+        sources._raise_for(RuntimeError("ERROR: Video unavailable"))
+        raise AssertionError("an ordinary failure should raise")
+    except sources.SourceError as exc:
+        assert exc.pause is False
+
+    # the download asks for a 1080p cap and writes source.<ext> where it was told to
+    import tempfile
+
+    asked = {}
+
+    class FakeYDL:
+        def __init__(self, options):
+            asked.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {"duration": 300, "availability": "public", "title": "Shipping on a Friday"}
+
+        def download(self, urls):
+            Path(asked["outtmpl"].replace("%(ext)s", "mp4")).write_bytes(b"video")
+
+    with tempfile.TemporaryDirectory() as tmp, \
+            mock.patch.object(sources, "_ydl", lambda extra=None: FakeYDL({**(extra or {})})):
+        saved = sources.fetch("https://www.youtube.com/watch?v=vid_new", Path(tmp) / "run", 60)
+        assert saved.name == "source.mp4" and saved.read_bytes() == b"video"
+        assert "height<=1080" in asked["format"]
+
+
 def test_load_words_accepts_whisper_dumps():
     words = load_words({"segments": [{"words": [{"word": " hi ", "start": 0, "end": 0.4}]}]})
     assert words[0].text == "hi"
