@@ -168,6 +168,12 @@ def _ydl(extra: dict | None = None):
             "yt-dlp is not installed - pip install -e '.[channels]' to watch channels"
         ) from exc
     options = {"quiet": True, "no_warnings": True, "noplaylist": True, "noprogress": True}
+    # yt-dlp pins its own certificate bundle, which fails on any machine whose HTTPS is
+    # intercepted - a corporate proxy, or antivirus. When this environment names a bundle,
+    # that is the signal: tell yt-dlp to trust the system store the way everything else here
+    # does. (It is a compat option, not a setting - there is no bundle path to hand it.)
+    if os.getenv("SSL_CERT_FILE") or os.getenv("REQUESTS_CA_BUNDLE"):
+        options["compat_opts"] = {"no-certifi"}
     cookies = os.getenv("SHORTS_YTDLP_COOKIES")
     if cookies:
         options["cookiefile"] = cookies
